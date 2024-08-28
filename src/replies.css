@@ -1,0 +1,417 @@
+.kiwi-inputtool-emoji-emoji {
+    font-size: 22px;
+
+}
+
+.emoji-tool {
+    padding: 8px;
+    padding-top: 0px;
+}
+
+.emoji-search-container {
+    width: 100%;
+    position: sticky;
+    padding-top: 4px;
+    padding-bottom: 0;
+    border-top: 1px var(--brand-darktone) inset;
+    display: flex;
+    align-items: center;
+    top: 0;
+}
+
+.tooltip {
+    transition: opacity ease-in-out 0.1s;
+    opacity: 0;
+    position: absolute;
+    top: -100%;
+    left: -16px;
+    pointer-events: none;
+}
+
+.tooltip.center {
+    top: 4px;
+}
+
+.tooltip.right {
+    left: 32px;
+    right: 0;
+}
+
+.tooltip.left {
+    right: 32px;
+    left: 0;
+}
+
+
+
+.tooltip.bottom {
+    top: 14px;
+}
+
+.kiwi-messagelist-modern-right {
+    overflow: visible !important;
+}
+
+.emoji-mart-category-label h3 {
+    background-color: var(--brand-shadow);
+}
+
+
+
+.kiwi-controlinput-form .reaction-tip.tooltip {
+    left: unset;
+    top: 27px;
+    width: 512px;
+    font-size: 12px;
+    right: -232px;
+
+}
+
+.emoji-mart {
+    color: var(--brand-default-fg);
+    background: var(--brand-default-bg);
+}
+
+.tooltip.top {
+    top: -28px;
+}
+
+.react-counts .tooltip {
+    background: var(--brand-default-bg);
+    border: var(--brand-default-fg) 1px solid;
+    padding: 2px;
+    z-index: 5;
+}
+
+.react-counts {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.react-count .tooltip.bottom {
+    top: 32px;
+}
+
+.react-count .text {
+    font-size: 0.7rem;
+    white-space: nowrap;
+}
+
+.react-count .count {
+    position: absolute;
+    bottom: -10px;
+    right: 0px;
+}
+
+.react-counts i {
+    font-style: unset;
+}
+
+
+.react-count {
+    font-size: 24px;
+    max-height: 48px;
+    max-width: 48px;
+}
+
+.message-reaction-tip {
+    width: 256px;
+    font-size: 0.7em;
+    text-align: left;
+}
+
+.tooltip-container {
+    position: relative;
+}
+
+.tooltip-container:hover .tooltip {
+    opacity: 1;
+}
+
+.tooltip-container.active .tooltip {
+    opacity: 0;
+}
+
+.selected-emoji {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.messageinfo-reply .fa-plus {
+    transform: translate(2px, 3px);
+}
+
+.kiwi-messageinfo-reply .fa-face-smile {
+    transform: translate(14px, 3px);
+}
+
+.fa-stack-2x {
+    position: relative;
+}
+
+.fa-stack-item {
+    position: absolute;
+}
+
+.fa-stack-item-corner {
+    font-size: 12px !important;
+    transform: translate(-4px, -2px);
+}
+
+.react-count.kiwi-controlinput-button {
+    margin-left: 5px;
+    margin-right: 5px;
+}
+
+.kiwi-emoji-mart {
+    position: absolute;
+    bottom: 4px;
+    z-index: 10;
+}
+
+.kiwi-controlinput--show-tools--inline .kiwi-emoji-mart {
+    right: 20px;
+}
+
+
+.emoji-mart {
+    position: absolute;
+    z-index: 3;
+}
+
+.kiwi-emoji-mart.right {
+    left: 0;
+}
+
+.kiwi-emoji-mart.left {
+    right: 0;
+}
+
+.kiwi-emoji-mart.top {
+    bottom: 0;
+}
+
+.kiwi-emoji-mart.bottom {
+    top: 200%;
+}
+
+.react-emoji-mart {
+    transform: translateY(-32px);
+    transition: opacity ease-in-out 0.2s;
+    opacity: 0;
+    pointer-events: none;
+    display: none;
+    width: 316px;
+    height: 256px;
+
+}
+
+.react-emoji-mart.active {
+    opacity: 1;
+    pointer-events: unset;
+    display: flex;
+}
+
+.message-react-emoji-mart {
+    transform: translateY(-12px);
+    transition: opacity ease-in-out 0.2s;
+    opacity: 0;
+    pointer-events: none;
+    width: 316px;
+}
+
+.message-react-emoji-mart.active {
+    opacity: 1;
+    pointer-events: unset;
+}
+
+.react-btn {
+    display: inline-block;
+    position: relative;
+}
+
+.react-btn .fa-stack-2x {
+    margin-right: 24px;
+}
+
+/* .react-btn .fa-stack-item {
+
+} */
+
+.react-btn .fa-stack-item-corner {
+    transform: translate(-4px, 0px);
+}
+
+
+
+.message-reaction .fa-plus {
+    height: 12px;
+    width: 12px;
+    transform: translate(-11px, -2px);
+}
+
+.picker .kiwi-inputtool-emoji-emoji {
+    height: unset;
+    width: unset;
+}
+
+.kiwi-messagelist-body.small {
+    font-size: 0.75em;
+}
+
+.kiwi-inputtool-emoji-emoji.kiwi-messagelist-item {
+    padding: 2px;
+    border-radius: 6px;
+}
+
+.emoji-selector-container {
+    width: 100%;
+    max-height: 25vh;
+    overflow: auto;
+}
+
+.default-bg {
+    background: var(--brand-default-bg) !important;
+
+}
+
+.emoji-dropdown-item label {
+    transform: translateX(-4px);
+}
+
+.emoji-dropdown-item {
+    font-size: 22px;
+    padding: 2px;
+    width: 24px;
+    height: 24px;
+    margin-bottom: 4px;
+}
+
+.emoji-dropdown-item:first-child::before {
+    content: "";
+    padding-top: 24px;
+
+}
+
+.emoji-dropdown-item:last-child:after {
+    content: "";
+    padding-bottom: 24px;
+
+}
+
+.emoji-dropdown-item:last-child:first-child {
+    padding-top: 8px;
+}
+
+.emoji-dropdown-item:hover {
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.25);
+}
+
+.autocomplete ul {
+    transform: translateY(-16px);
+}
+
+.autocomplete {
+    position: relative;
+}
+
+.autocomplete input {
+    max-width: 25vw;
+    padding-left: 32px !important;
+    top: -8px;
+    background: var(--brand-default-bg);
+    height: 42px;
+    max-width: 40vw !important;
+    position: absolute;
+}
+
+.z-idx-up-1 {
+    z-index: 1;
+}
+
+.z-idx-up-2 {
+    z-index: 2;
+}
+
+.dropdown-menu {
+    max-width: 32px;
+    padding-right: 8px;
+}
+
+.dropdown-menu {
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    max-height: 320px;
+    width: 100%;
+    /* transform: ScaleY(-1); */
+    top: -34vh;
+    background: var(--brand-default-bg);
+    border: var(--comp-border) 1px solid;
+    list-style-type: none;
+}
+
+ul.dropdown-menu li {
+    transform: translateX(-10px);
+}
+
+.emoji-section {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.kiwi-controlinput-form {
+    overflow: visible;
+}
+
+.rotate-180 {
+    transform: rotate(180deg);
+}
+
+.kiwi-controlinput-input-wrap {
+    overflow: visible;
+}
+
+.tooltip-activator:hover+.tooltip {
+    opacity: 1;
+}
+
+.cancel-react {
+    color: var(--brand-error);
+    transition: font-size ease-in-out 0.1s;
+    font-size: 14px !important;
+}
+
+.cancel-react:hover {
+    color: var(--brand-error);
+
+    font-size: 18px !important;
+}
+
+.kiwi-messagelist-item {
+    overflow: visible;
+}
+
+.kiwi-messagelist-message {
+    overflow: visible;
+}
+
+.kiwi-messageinfo-actions {
+    overflow: visible;
+}
+
+@media screen and (width < 720px) {
+    .emoji-mart {
+        max-width: 256px;
+    }
+
+    .emoji-selector-container {
+        max-height: 30vh;
+        overflow: auto;
+    }
+}
