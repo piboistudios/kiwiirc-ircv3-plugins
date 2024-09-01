@@ -41,6 +41,18 @@ kiwi.plugin('message-redaction', function (kiwi, log) {
                  */
                 (client, raw, parsed) => {
                     const TextFormatting = kiwi.require('helpers/TextFormatting');
+                    const REDACTIONS = 'redaction';
+                    parsed.use((event_name, event, client, next) => {
+                        if (event)
+                            if (event.target && event.tags) {
+                                const buf = network.bufferByName(event.target);
+                                if (!buf) return next();
+                                if (buf.state[REDACTIONS]) {
+                                    return (event.tags.msgid && buf.state[REDACTIONS].has(event.tags.msgid)) || next();
+                                }
+                            }
+                        next();
+                    })
                     raw.use(
                         /**
                          * 
@@ -54,17 +66,26 @@ kiwi.plugin('message-redaction', function (kiwi, log) {
                                 if (event_name.toLowerCase() === 'redact') {
                                     const target = event.params[0];
                                     const msgid = event.params[1];
-                                    if (!target || !msgid) return;
+                                    if (!target || !msgid) return next();
                                     const buf = network.bufferByName(target);
-                                    if (!buf) return;
+                                    if (!buf) return next();
+                                    /**
+                                     * @type {Map<string, boolean>}
+                                     */
+                                    const redactions = buf.state[REDACTIONS] || new Map();
+                                    if (!buf.state[REDACTIONS]) {
+                                        buf.state[REDACTIONS] = redactions;
+                                    }
+                                    redactions.set(msgid, true);
                                     const messages = buf.getMessages();
                                     const idx = messages.findIndex(m => m?.tags?.msgid === msgid);
                                     if (idx !== -1) messages.splice(idx, 1);
+                                    if (event.params.length < 3) return next();
                                     const messageBody = TextFormatting.formatText('action', {
                                         nick: event.nick,
                                         username: event.ident,
                                         host: event.hostname,
-                                        text: event.params[event.params.length-1],
+                                        text: event.params[2],
                                     });
 
                                     const message = {

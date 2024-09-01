@@ -101,12 +101,12 @@ kiwi.plugin('message-replies', async function (kiwi, log) {
 
         template: `
             <div v-if="reacts" class="react-counts">
-                <div @click.stop="reactWith(emoji)" class="react-count kiwi-controlinput-button tooltip-container" v-for="(nicks, emoji) in reacts" :key="emoji">
+                <div @click.stop="reactWith(emoji)" class="react-count kiwi-controlinput-button tooltip-container" v-for="(reactors, emoji) in reacts" :key="emoji">
                     
                     <i>{{ emoji }}</i>
-                    <span class="text count">{{nicks.length}}</span>
+                    <span class="text count">{{reactors.length}}</span>
                     <span class="tooltip bottom text">
-                        <strong :style="\`color:\${users[nick.toUpperCase()]?.getColour?.()}\`" v-for="(nick, idx) in nicks">{{ nick }}<template v-if="idx !== nicks.length-1">,</template></strong>
+                        <strong :style="\`color:\${users[reactor.nick.toUpperCase()]?.getColour?.()}\`" v-for="(reactor, idx) in reactors">{{ reactor.nick }}<template v-if="idx !== reactors.length-1">,</template></strong>
                         reacted with <strong>{{ colons(emoji) }}</strong>
                     </span>
                 </div>
@@ -150,9 +150,9 @@ kiwi.plugin('message-replies', async function (kiwi, log) {
             },
             reacts() {
                 this.state;
-                const ret = this.msgid && this.buffer.setting('reactions')?.[this.msgid];
+                const ret = this.msgid && this.buffer.state?.reactions?.[this.msgid];
                 ret && delete ret['undefined'];
-                return Object.fromEntries(Object.entries(ret).filter(e => Boolean(e[1].length)));
+                return ret && Object.fromEntries(Object.entries(ret).filter(e => Boolean(e[1].length)));
             }
         },
         methods: {
@@ -338,70 +338,90 @@ kiwi.plugin('message-replies', async function (kiwi, log) {
      * }} param0 
      */
     function selectEmoji({ buf, net, nick, msgid, emoji }) {
-        const { reacted, label } = setReactionUi({ buf, msgid, emoji, nick });
-        log.debug("Reacted:", { reacted, label, msgid });
-        if (reacted) {
-            const correlation = buf.state.reacts[msgid] || (label && buf.state.reacts[label]);
-            if (!correlation?.msgid) return;
-            unsetReactionUi({ buf, msgid, emoji, nick });
-            log.debug("Correlation:", correlation);
-            log.debug("reacts:", buf.state.reacts);
-            log.debug("label:", label);
-            const msg = new IrcMessage('REDACT', buf.name, correlation.msgid);
-            msg.tags = {
-                label: uuid()
-            };
+
+        const existingReact = buf?.state?.reactions?.[msgid]?.[emoji]?.find?.(e => e.nick === nick);
+        if (existingReact) {
+            log.debug("Removed react:", existingReact);
+            unsetReactionUi({ buf, msgid, nick, emoji });
+            if (!existingReact.id) return
+            removeReact(buf, existingReact.id);
+            const msg = new IrcMessage('REDACT', buf.name, existingReact.id);
+            if (net.ircClient.network.cap.enabled.includes('draft/labeled-response')) {
+                msg.tags = { label: uuid() }
+            }
             net.ircClient.raw(msg.to1459());
             return;
         }
-
+        const { label } = setReactionUi({ buf, msgid, emoji, nick });
+        log.debug("Reacted:", { msgid });
         const msg = new IrcMessage('TAGMSG', buf.name);
         buf.state.reacts ??= {};
         buf.state.reacts[label] = { emoji, nick };
         msg.tags = {
             '+draft/react': emoji,
             '+draft/reply': msgid,
-            label
         };
+        if (label) msg.tags.label = label;
         net.ircClient.raw(msg.to1459());
     }
-    const LABEL = Symbol('label');
+    function removeReact(buf, reactid) {
+        if (!buf) return log.error("buf required");
+        if (!reactid) return log.error('reactid required');
+        if (buf.state.reaction_msgs?.[reactid]) {
+            const item = buf.state.reaction_msgs[reactid];
+            item.arr.splice(item.arr.indexOf(item.entry), 1);
+            unsetReactionUi({ buf, msgid: item.msgid, nick: item.entry.nick, emoji: item.emoji });
+            delete buf.state.reaction_msgs[reactid];
+        }
+    }
     /**
      * 
      * @param {{buf:import('../../kiwiirc/src/libs/state/BufferState').default}} param0 
      */
-    function setReactionUi({ buf, msgid, emoji, nick, event }) {
-        const _reactions = buf.setting('reactions');
+    function setReactionUi({ buf, msgid, emoji, nick, label, reactid }) {
+        const net = buf.getNetwork();
+        if (!label && net.ircClient.network.cap.enabled.includes('draft/labeled-response'))
+            label = uuid();
+        const _reactions = buf.state.reactions;
         const data = _reactions || { [msgid]: { [emoji]: [] } };
         if (!data[msgid]) data[msgid] = { [emoji]: [] };
         if (!data[msgid][emoji]) data[msgid][emoji] = [];
-        !_reactions && buf.setting('reactions', data);
-        const didntExist = !data[msgid][emoji].includes(nick);
-        didntExist && data[msgid][emoji].push(nick);
-        if (!_reactions) buf.setting('reactions', data);
+        if (!_reactions) buf.state.reactions = data;
+        let entry = data[msgid][emoji].find(e => e.nick === nick);
+        if (!entry) {
+            entry = { nick, label, id: reactid };
+            data[msgid][emoji].push(entry);
+        }
+        if (!_reactions) buf.state.reactions = data;
         const msg = cache[msgid] !== undefined ? cache[msgid] : buf.getMessages().find(m => m?.tags?.msgid === msgid);
-        const labelKey = [msgid, emoji, nick, "label"].join('.')
-        const label = event ? (event?.tags?.label || event?.tags?.msgid) : (didntExist ? uuid() : buf.setting(labelKey));
         cache[msgid] = msg;
-        buf.setting(labelKey, label)
         if (msg) {
             msg[REACT_INTERNALS] && msg[REACT_INTERNALS].update();
         }
-        return { reacted: !didntExist, label };
+        const stored = { entry, arr: data[msgid][emoji], emoji, msgid };
+        if (label) {
+            buf.state.reaction_labels ??= {};
+            buf.state.reaction_labels[label] = entry;
+        }
+        if (reactid) {
+            buf.state.reaction_msgs ??= {};
+            buf.state.reaction_msgs[reactid] = stored;
+        }
+        return entry;
     }
     /**
      * 
      * @param {{buf:import('../../kiwiirc/src/libs/state/BufferState').default}} param0 
      */
     function unsetReactionUi({ buf, msgid, emoji, nick }) {
-        const _reactions = buf.setting('reactions');
+        const _reactions = buf.state.reactions;
         const data = _reactions || { [msgid]: { [emoji]: [] } };
         if (!data[msgid]) data[msgid] = { [emoji]: [] };
         if (!data[msgid][emoji]) data[msgid][emoji] = [];
-        !_reactions && buf.setting('reactions', data);
-        const idx = data[msgid][emoji].indexOf(nick);
+        if (!_reactions) buf.state.reactions = data;
+        const idx = data[msgid][emoji].findIndex(e => e.nick === nick)
         idx !== -1 && data[msgid][emoji].splice(idx, 1);
-        if (!_reactions) buf.setting('reactions', data);
+        if (!_reactions) buf.state.reactions = data;
         const msg = cache[msgid] !== undefined ? cache[msgid] : buf.getMessages().find(m => m?.tags?.msgid === msgid);
         cache[msgid] = msg;
         if (msg) {
@@ -431,8 +451,8 @@ kiwi.plugin('message-replies', async function (kiwi, log) {
 
                             </span>
                             <span v-else :class="{'active': reacting }" class="fa-stack-2x message-reaction tooltip-container z-idx-up-2">
-                                <span  class="message-reaction-tip tooltip right center">Reaction</span>
-                                <svg-icon icon="fa-regular fa-face-smile" class="fa fa-stack-item fa-face-smile z-idx-up-2" aria-hidden="true" />
+                                <span  class="message1-reaction-tip tooltip right center">Reaction</span>
+                                <svg-icon icon="fa-rgular fa-face-smile" class="fa fa-stack-item fa-face-smile z-idx-up-2" aria-hidden="true" />
                                 <svg-icon icon="fa fa-stack-item fa-stack-item-corner fa-plus" aria-hidden="true" />
                                  <emoji-picker
                                     ref="emoji-picker"
@@ -591,16 +611,20 @@ kiwi.plugin('message-replies', async function (kiwi, log) {
                                     if (!target || !msgid) return;
                                     const buf = network.bufferByName(target);
                                     if (!buf) return;
-                                    if (!buf.state.reacts) return;
-                                    const react = buf.state.reacts[msgid];
-                                    const { emoji, nick, msgid: refid } = react;
-                                    unsetReactionUi({ buf, msgid: refid, emoji, nick, event });
+                                    if (!buf.state.reactions) return;
+                                    const react = buf.state.reaction_msgs[msgid];
+                                    
+                                    const { emoji, entry: {nick}, msgid: refid } = react;
+                                    unsetReactionUi({ buf, msgid: refid, emoji, nick });
                                 }
                             }
                             next();
                         })
                     parsed.use((event_name, event, client, next) => {
-
+                        const buf = event?.target && network.bufferByName(event.target);
+                        if (buf) {
+                            if (buf.redactions?.[event?.tags?.msgid]) return;
+                        }
                         if (event_name.toLowerCase() === 'tagmsg') {
                             const cond = event?.tags["+draft/reply"] && event?.tags["+draft/react"];
                             if (cond) reacthandler: {
@@ -615,17 +639,23 @@ kiwi.plugin('message-replies', async function (kiwi, log) {
                                 if (buf) {
                                     const reactid = event?.tags?.msgid;
                                     const label = event?.tags?.label;
-                                    if (label && buf.state?.reacts?.[label]) {
-                                        buf.state.reacts[label].msgid = reactid;
+                                    if (reactid && label) {
+                                        const entry = buf.state?.reaction_labels?.[label];
+                                        if (entry) {
+                                            entry.id = reactid;
+                                        }
                                     }
-                                    if (reactid) {
+                                    // if (label && buf.state?.reactions?.[label]) {
+                                    //     buf.state.reactions[label].msgid = reactid;
+                                    // // }
+                                    // if (reactid) {
 
-                                        buf.state.reacts ??= {};
-                                        buf.state.reacts[reactid] = { msgid, emoji, nick };
-                                        buf.state.reacts ??= {};
-                                        buf.state.reacts[msgid] = { msgid: reactid, emoji, nick };
-                                    }
-                                    setReactionUi({ buf, msgid, emoji, nick, event })
+                                    //     buf.state.reactions ??= {};
+                                    //     buf.state.reactions[reactid] = { msgid, emoji, nick };
+                                    //     // buf.state.reactions ??= {};
+                                    //     // buf.state.reactions[msgid] = { msgid: reactid, emoji, nick };
+                                    // }
+                                    setReactionUi({ buf, msgid, emoji, nick, label, reactid })
                                 }
                             }
                         }
