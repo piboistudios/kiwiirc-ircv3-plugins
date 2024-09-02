@@ -12,6 +12,7 @@ module.exports = {
         'emoji-webpacked': './src/emoji.js',
         'message-redaction-webpacked': './src/message-redaction.js',
         'echo-labeled-response-webpacked': './src/echo-labeled-response.js',
+        'conference-lite-webpacked': './src/conference-lite.js',
         // 'module/b/index': 'module/b/index.js',
     },
     output: {

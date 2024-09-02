@@ -7,7 +7,6 @@ const REPLY_COMMANDS = [
     "BATCH"
 ]
 
-
 const { Picker } = kiwi.require('components/utils/VueEmojiMartFast');
 const IrcMessage = require('irc-framework/src/ircmessage');
 const { v4: uuid } = require('uuid');
@@ -15,6 +14,12 @@ require('emoji-mart-vue-fast/css/emoji-mart.css');
 
 const REACT_INTERNALS = Symbol('react');
 kiwi.plugin('message-replies', async function (kiwi, log) {
+    const {
+         faReply
+    } = await import('@fortawesome/free-solid-svg-icons/faReply')
+    kiwi.svgIcons.library.add(faReply)
+
+
     const HAS_LISTENERS = Symbol('has-emoji-listeners');
     function setupListener() {
         const container = document.querySelector('.kiwi-container-content');
@@ -127,7 +132,7 @@ kiwi.plugin('message-replies', async function (kiwi, log) {
                             :data="emojiIndex"          
                             class="kiwi-emoji-mart message-react-emoji-mart"         
                             @select="selectEmoji"     
-                        />
+                          />
                     </span>
                 </div>
             </div>
@@ -212,10 +217,10 @@ kiwi.plugin('message-replies', async function (kiwi, log) {
     const prepend = /* kiwi.Vue.createApp */({
         template: `<div  v-if="isReply" class="irc-fg-colour-grey"  >
             <div @click.self.stop="scrollToReply" style="overflow:hidden;white-space:nowrap;display:inline-block;font-weight:initial;">
-            <i @click.self.stop="scrollToReply" class="fa fa-reply rotate-180"/>
-            <span @click.self.stop="scrollToReply">
+            <svg-icon @click.self.stop="scrollToReply" icon="reply" class="rotate-180"/>
+            <span class="in-reply-to" @click.self.stop="scrollToReply">
             <template v-if="react">Reacted {{react}} in</template>
-            <template v-else>In</template> reply to <a class="u-link" @click.stop="onUserClick(subject.nick)" :style="\`color:\${subject.user.getColour()}\`"><strong>{{subject.nick}}</strong></a>:</span></div>
+            <template v-else>In</template> reply to <a class="u-link" @click.stop="onUserClick(subject.nick)" :style="\`color:\${subject.user.getColour()}\`"><strong>{{subject.nick}}</strong></a>: </span></div>
             <a
                 class="u-link"
                 style="margin:0;font-style: italic;"
@@ -275,7 +280,7 @@ kiwi.plugin('message-replies', async function (kiwi, log) {
     });
     const reply = /* kiwi.Vue.createApp */({
         template: `<a v-if="message.tags.msgid" @click="reply" class="u-link kiwi-messageinfo-reply">
-                    <svg-icon icon="fa fa-reply rotate-180"/>
+                    <svg-icon icon="reply" class="rotate-180"/>
                     Reply
                     </a>`,
         methods: {
@@ -645,16 +650,6 @@ kiwi.plugin('message-replies', async function (kiwi, log) {
                                             entry.id = reactid;
                                         }
                                     }
-                                    // if (label && buf.state?.reactions?.[label]) {
-                                    //     buf.state.reactions[label].msgid = reactid;
-                                    // // }
-                                    // if (reactid) {
-
-                                    //     buf.state.reactions ??= {};
-                                    //     buf.state.reactions[reactid] = { msgid, emoji, nick };
-                                    //     // buf.state.reactions ??= {};
-                                    //     // buf.state.reactions[msgid] = { msgid: reactid, emoji, nick };
-                                    // }
                                     setReactionUi({ buf, msgid, emoji, nick, label, reactid })
                                 }
                             }

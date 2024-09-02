@@ -1,12 +1,13 @@
 const IrcMessage = require('irc-framework/src/ircmessage');
 
-kiwi.plugin('message-redaction', function (kiwi, log) {
+kiwi.plugin('message-redaction', async function (kiwi, log) {
+
     kiwi.on('start',
 
         async () => {
             const redact = /* kiwi.Vue.createApp */({
                 template: `<a v-if="message?.tags?.msgid" @click="redact" class="u-link kiwi-messageinfo-reply">
-                            <svg-icon icon="fa fa-reply rotate-180"/>
+                            <svg-icon icon="fa fa-close"/>
                             Delete Message
                             </a>`,
                 methods: {

@@ -18,7 +18,9 @@
     align-items: center;
     top: 0;
 }
-
+.in-reply-to {
+    margin-right: 8px;
+}
 .tooltip {
     transition: opacity ease-in-out 0.1s;
     opacity: 0;
@@ -27,7 +29,14 @@
     left: -16px;
     pointer-events: none;
 }
-
+.vid-container {
+    display: flex;
+    position: absolute;
+}
+.vid-container video {
+    padding: 4px;
+    border: 2px dashed var(--brand-default-fg);
+}
 .tooltip.center {
     top: 4px;
 }
