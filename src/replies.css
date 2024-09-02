@@ -32,6 +32,7 @@
 .vid-container {
     display: flex;
     position: absolute;
+    left: 0;
 }
 .vid-container video {
     padding: 4px;

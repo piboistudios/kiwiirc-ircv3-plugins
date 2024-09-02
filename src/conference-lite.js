@@ -4,6 +4,150 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
     const {
         faPhone
     } = await import('@fortawesome/free-solid-svg-icons/faPhone')
+    const media = {
+        props: ['buffer', 'network', 'sidebarState'],
+        computed: {
+            localStream() {
+                const ret = this.$state.localStream;
+                return ret;
+            },
+            peers() {
+                this.state;
+                this.$state.peers ??= {};
+                return this.$state.peers;
+            },
+            connectedPeers() {
+                this.state;
+                return Object.fromEntries(Object.entries(this.peers).filter(([_, peer]) => {
+                    log.debug("filtering peers?", "k", _, "v", peer);
+                    log.debug("connected?", peer.connected);
+                    return peer.connected;
+                }));
+            }
+        },
+        methods: {
+            update() {
+                this.state = (this.state + 1) % 1024;
+                log.debug("Updating:", this.state);
+            }
+        },
+        data() {
+            return {
+                state: 0
+            }
+        },
+    }
+    const MediaViewer = kiwi.require('components/MediaViewer');
+    const peer = {
+        props: ['peerId', 'network', 'remote'],
+        template: `
+            <video ref="vid" class="live-vid" autoplay playsinline :muted="muted" :data-user-id="peerId" />
+        `,
+        mounted() {
+            log.debug("peer vm:", this);
+            this.remote && log.debug("remote?", this.remote);
+            this.$nextTick(() => {
+
+                this.setMaxHeight('70vh');
+                this.setMaxWidth('33vh');
+                this.setHeight('512px');
+                this.setWidth('512px')
+                if (this.isMe) {
+                    this.attachLocalStream();
+                } else if (this.remote) {
+                    this.attachRemoteStream();
+                }
+            });
+
+        },
+        methods: {
+            setWidth(v) {
+                if (!this.$refs.vid) return this.$nextTick(() => this.setWidth(v));
+                this.$refs.vid.style.width = v;
+            },
+            setMaxWidth(v) {
+                if (!this.$refs.vid) return this.$nextTick(() => this.setMaxWidth(v));
+                this.$refs.vid.style.maxWidth = v;
+            },
+            setHeight() {
+                return this.$parent.setHeight(...arguments);
+            },
+            setMaxHeight() {
+                return this.$parent.setMaxHeight(...arguments);
+            },
+            attachLocalStream() {
+                if (this.attempts.localStream >= this.maxAttempts.localStream) return;
+                this.attempts.localStream++;
+                if (!this.$refs.vid) return this.$nextTick(this.attachLocalStream);
+                if (!this.$state.localStream) return setTimeout(this.attachLocalStream, 100);
+                this.$refs.vid.srcObject = this.$state.localStream;
+            },
+            attachRemoteStream() {
+                if (this.attempts.remoteStream >= this.maxAttempts.remoteStream) return;
+                this.attempts.remoteStream++;
+                if (!this.$refs.vid) return this.$nextTick(this.attachRemoteStream);
+                if (!this.remote?.streams?.length) return setTimeout(this.attachRemoteStream, 100);
+                this.$refs.vid.srcObject = this.remote.streams[0];
+            }
+        },
+        data() {
+            return {
+                attempts: {
+                    localStream: 0,
+                    remoteStream: 0,
+                },
+                maxAttempts: {
+                    localStream: 32,
+                    remoteStream: 32,
+                }
+            }
+        },
+        computed: {
+            isMe() {
+                return this.peerId === 0;
+            },
+            muted() {
+                return this.isMe;
+            }
+        }
+    };
+    const conference = {
+        mixins: [media],
+        components: {
+            MediaViewer,
+        },
+        data() {
+            return {
+                peer
+            }
+        },
+        mounted() {
+            this.$state.$on('conference-lite.update', this.update);
+            this.$nextTick(() => {
+
+                this.$parent.setMaxHeight('70vh');
+                this.$parent.setHeight('1024px');
+            });
+        },
+        template: `
+        <div class="vid-container">
+            <div class="me">
+                <media-viewer 
+                    
+                    :component="peer" 
+                    :component-props="{ network, buffer, peerId: 0 }" 
+                />
+            </div>
+            <div class="peers" :key="state">
+                <media-viewer
+                    v-for="(remote, id) in connectedPeers" 
+                    :component="peer" 
+                    :component-props="{ network, buffer, peerId: id, remote }" 
+                />
+            </div>
+        </div>`,
+
+    }
     kiwi.svgIcons.library.add(faPhone)
     kiwi.addUi('header_channel', {
         template: `<div ref="root">
@@ -11,41 +155,22 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 <svg-icon icon="phone" class="tooltip-trigger"/>
                 <span class="tooltip">Conference Call</span>
             </a>
-            <div class="vid-container">
-                <video v-if="localStream" ref="local" playsinline autoplay muted />
-                <video autoplay playsinline :data-user-id="id" v-for="(peer, id) in peers">
-            </div>
-            </video>
         </div>
         `,
-        props: ['buffer', 'network', 'sidebarState'],
-        computed: {
-            localStream() {
-                const ret = this.$state.localStream;
-                if (ret) {
-                    this.$nextTick(() => {
-                        this.$refs.local.srcObject = ret;
-                    })
-                }
-                return ret;
-            },
-            peers() {
-                this.$state.peers ??= {};
-                return this.$state.peers;
-            }
-        },
+        props: ['pluginState'],
+        mixins: [media],
         methods: {
-            attach(user) {
-                log.debug("Refs:", this.$refs);
-                const vidEl = document.body.querySelector(`[data-user-id="${user.id}"]`);
-                if (!vidEl) return setTimeout(() => this.attach(user), 1000);
-                const [stream] = this.peers[user.id].streams;
-                if (!stream) return log.error("No stream for user:", { user, peer: this.peers[user.id] });
-                log.debug("Connecting video...", user, vidEl);
-                alert('connecting vid..');
-                vidEl.srcObject = stream;
-            },
             async joinCall() {
+                log.debug("vm:", this);
+                this.$state.emit('mediaviewer.show', {
+                    component: conference,
+                    componentProps: {
+                        pluginState: this.pluginState,
+                        sidebarState: this.sidebarState,
+                        network: this.network,
+                        buffer: this.buffer,
+                    }
+                });
                 /**
                  * @type {import('../../kiwiirc/src/libs/state/BufferState').default}
                  */
@@ -65,12 +190,6 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                          * @todo check if user modes
                          */
                         const local = await connect(u, buf, net);
-                        this.peers[u.id].ontrack = () => {
-                            this.$nextTick(() => {
-
-                                this.attach(u);
-                            });
-                        }
                         if (!(this.peers[u.id].answer instanceof Function)) {
 
                             const offer = await local.createOffer();
@@ -120,7 +239,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         kiwi.state.localStream ??= await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
         const local = new RTCPeerConnection();
         kiwi.state.peers ??= {};
-        kiwi.state.peers[u.id] ??= {};
+        kiwi.state.peers[u.id] ??= mkPeer();
         kiwi.state.peers[u.id].connection = local;
         local.onicecandidate = e => {
             log.debug("Ice candidate...", e);
@@ -139,13 +258,33 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         local.ontrack = e => {
             log.debug("got a track", e);
             kiwi.state.peers[u.id].streams = e.streams
+            updateConference();
             kiwi.state.peers[u.id]?.ontrack?.(e);
         }
         kiwi.state.localStream.getTracks().forEach(t => {
-            log.debug('adding track', t);
-            local.addTrack(t, kiwi.state.localStream)
+            local.addTrack(t, kiwi.state.localStream);
+            updateConference();
         });
+
         return local;
+    }
+    function updateConference() {
+        kiwi.state.$emit('conference-lite.update');
+
+    }
+    function mkPeer() {
+        return {
+            _connected: false,
+            get connected() {
+                return this._connected;
+            },
+            set connected(v) {
+                this._connected = v;
+                updateConference();
+                log.debug("connected?", this)
+                return this._connected;
+            }
+        }
     }
     const CTCP_EVENTS = ['ctcp response', 'ctcp request']
     kiwi.on('start', async () => {
@@ -170,47 +309,55 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                         if (!user) return next();
                         log.debug('processing ctcp...');
                         const sdp = event.tags["+draft/sdp"];
+                        kiwi.state.peers ??= {};
+                        kiwi.state.peers[user.id] ??= mkPeer();
+                        const peer = kiwi.state.peers[user.id];
                         switch (event.type) {
                             case 'OFFER': {
-                                kiwi.state.peers[user.id] ??= {
 
-                                };
-                                kiwi.state.peers[user.id].connected = false;
-                                kiwi.state.peers[user.id].answer = async function () {
-                                    kiwi.state.peers[user.id].connected = true;
-                                    const local = await connect(user, buf, network);
-                                    await local.setRemoteDescription({ type: 'offer', sdp });
-                                    const answer = await local.createAnswer();
+                                peer.answer = async function () {
+                                    log.debug("answering");
+                                    const cnx = await connect(user, buf, network);
+                                    await cnx.setRemoteDescription({ type: 'offer', sdp });
+                                    const answer = await cnx.createAnswer();
                                     const msg = ctcp('respond', event.nick, 'ANSWER', {
                                         '+draft/sdp': answer.sdp
                                     });
                                     network.ircClient.raw(msg.to1459());
-                                    await local.setLocalDescription(answer);
+                                    await cnx.setLocalDescription(answer);
+                                    peer.connected = true;
+
                                 }
 
                                 break;
                             }
                             case 'ANSWER': {
-                                const local = kiwi.state.peers[user.id].connection;
-                                if (local) await local.setRemoteDescription({
-                                    type: 'answer',
-                                    sdp
-                                });
+                                // alert('answering');
+                                const cnx = peer.connection;
+                                log.debug("cnx", cnx);
+                                if (cnx) {
+                                    await cnx.setRemoteDescription({
+                                        type: 'answer',
+                                        sdp
+                                    });
+                                    log.debug('remote desc set', sdp);
+                                    peer.connected = true;
+                                }
                                 else {
                                     log.error("Received an answer for non existent call:", { event, user, peers: kiwi.state.peers })
                                 }
                                 break;
                             }
                             case 'ICE_CANDIDATE': {
-                                const local = kiwi.state.peers[user.id].connection;
-                                if (local) {
+                                const cnx = peer.connection;
+                                if (cnx) {
                                     const candidate = {
                                         candidate: event.tags['+draft/candidate'],
                                         sdpMid: event.tags['+draft/sdpmid'],
                                         sdpMLineIndex: event.tags['+draft/sdpmlineindex'],
                                     }
                                     log.debug("Adding ice candidate", candidate);
-                                    await local.addIceCandidate(candidate.candidate ? candidate : null);
+                                    await cnx.addIceCandidate(candidate.candidate ? candidate : null);
                                 }
                                 break;
                             }
