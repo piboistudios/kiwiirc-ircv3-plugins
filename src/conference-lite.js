@@ -159,6 +159,11 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         `,
         props: ['pluginState'],
         mixins: [media],
+        data() {
+            return {
+                callState: null
+            }
+        },
         methods: {
             async joinCall() {
                 log.debug("vm:", this);
@@ -171,6 +176,8 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                         buffer: this.buffer,
                     }
                 });
+                if (this.callState) return;
+                this.callState = 'joining';
                 /**
                  * @type {import('../../kiwiirc/src/libs/state/BufferState').default}
                  */
@@ -206,7 +213,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
 
                     }
                 ));
-
+                this.callState = 'joined';
             }
         }
     });
