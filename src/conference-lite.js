@@ -176,6 +176,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                         buffer: this.buffer,
                     }
                 });
+                this.$state.localStream ??= await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
                 if (this.callState) return;
                 this.callState = 'joining';
                 /**
@@ -196,20 +197,13 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                         /**
                          * @todo check if user modes
                          */
-                        const local = await connect(u, buf, net);
-                        if (!(this.peers[u.id].answer instanceof Function)) {
-
-                            const offer = await local.createOffer();
-                            const msg = ctcp('request', u.nick, 'OFFER', {
-                                '+draft/sdp': offer?.sdp
-                            });
-                            net.ircClient.raw(msg.to1459());
-                            await local.setLocalDescription(offer);
-
-                        }
-                        else if (!this.peers[u.id].connected) {
-                            await this.peers[u.id].answer();
-                        }
+                        const cnx = await connect(u, buf, net);
+                        const offer = await cnx.createOffer();
+                        const msg = ctcp('request', u.nick, 'OFFER', {
+                            '+draft/sdp': offer?.sdp
+                        });
+                        net.ircClient.raw(msg.to1459());
+                        await cnx.setLocalDescription(offer);
 
                     }
                 ));
@@ -243,7 +237,6 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
      * 
      */
     async function connect(u, buf, net) {
-        kiwi.state.localStream ??= await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
         const local = new RTCPeerConnection();
         kiwi.state.peers ??= {};
         kiwi.state.peers[u.id] ??= mkPeer();
@@ -335,7 +328,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                                     peer.connected = true;
 
                                 }
-
+                                await peer.answer();
                                 break;
                             }
                             case 'ANSWER': {
