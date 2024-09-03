@@ -2,15 +2,31 @@ const IrcMessage = require('irc-framework/src/ircmessage');
 
 kiwi.plugin('conference-lite', async function (kiwi, log) {
     const {
-        faPhone
+        faPhone,
     } = await import('@fortawesome/free-solid-svg-icons/faPhone')
+    const {
+        faVideoSlash
+    } = await import('@fortawesome/free-solid-svg-icons/faVideoSlash')
+    const {
+        faVideo
+    } = await import('@fortawesome/free-solid-svg-icons/faVideo')
+    const {
+        faMicrophoneSlash
+    } = await import('@fortawesome/free-solid-svg-icons/faMicrophoneSlash')
+    const {
+        faMicrophone
+    } = await import('@fortawesome/free-solid-svg-icons/faMicrophone')
+    kiwi.svgIcons.library.add(
+        faPhone,
+        faVideo,
+        faVideoSlash,
+        faMicrophone,
+        faMicrophoneSlash
+    );
+
     const media = {
         props: ['buffer', 'network', 'sidebarState'],
         computed: {
-            localStream() {
-                const ret = this.$state.localStream;
-                return ret;
-            },
             peers() {
                 this.state;
                 this.$state.peers ??= {};
@@ -31,6 +47,20 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     log.debug("connected?", peer.connected);
                     return peer.connection.connectionState === 'connecting';
                 }));
+            },
+            feeds() {
+                this.state;
+                const entries = Object.entries(this.connectedPeers);
+                entries.unshift([0, {
+                    local: true,
+                    connection: null,
+                    streams: this.$state.localStreams
+                }])
+                const ret = entries.flatMap(([id, cnx]) => (cnx?.streams || []).map(stream => ({ ...cnx, id, stream })))
+                log.debug("feeds?", ret);
+                log.debug("entries?", entries);
+                return ret;
+
             }
         },
         methods: {
@@ -45,56 +75,83 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
             }
         },
     }
-    const MediaViewer = kiwi.require('components/MediaViewer');
     const peer = {
-        props: ['peerId', 'network', 'remote'],
+        props: ['network', 'feed'],
         template: `
             <div class="vid-container">
-                <div class="vid-overlay">
-                    <div class="u-link kiwi-controlinput-button">{{ connectionState}}</div>
-                    <div class="u-link kiwi-controlinput-button">{{ iceConnectionState}}</div>
-                    <div class="u-link kiwi-controlinput-button">{{ signalingState}}</div>
+                <video v-resizeobserver="resizeVideo" ref="vid"  class="live-vid" autoplay playsinline :muted="isMe" :data-user-id="feed.id">
+                    <h1 class="u-link">No Video</h1>
+                </video>
+                <div class="vid-overlay" :key="state">
+                    <div class="video-controls">
+                        <span @click="toggleVideo" class="kiwi-header-option">
+                            <a :title="videoEnabled ? 'Turn Off Camera' : 'Turn On Camera'">
+                                <svg-icon :icon="videoEnabled ? 'video' : 'video-slash'"/>
+                            </a>
+                        </span>
+                        <span @click="toggleAudio" class="kiwi-header-option">
+                            <a :title="muted ? 'Unmute' : 'Mute'">
+                                <svg-icon :icon="!muted ? 'microphone' : 'microphone-slash'"/>
+                            </a>
+                        </span>
+                    </div>
                 </div>
-                <video v-resizeobserver="resizeVideo" ref="vid"  class="live-vid" autoplay playsinline :muted="muted" :data-user-id="peerId" />
             </div>
         `,
         mounted() {
             log.debug("peer vm:", this);
-            this.$state.$on('conference-lite.update', () => this.$nextTick(this.resizeScreen));
-            this.remote && log.debug("remote?", this.remote);
+            this.$state.$on('conference-lite.update', () => {
+                this.$nextTick(this.resizeScreen)
+                    .then(() => this.$nextTick(this.update));
+            });
+            this.feed && log.debug("feed?", this.feed);
             window.addEventListener('resize', () => {
                 this.resizeScreen();
             })
             this.$nextTick(() => {
-
-                if (this.isMe) {
-                    this.attachLocalStream();
-                } else if (this.remote) {
-                    this.attachRemoteStream();
-                }
+                this.attachStream();
             });
 
         },
         computed: {
+            videoEnabled() {
+                this.state;
+                return Boolean(this?.feed?.stream?.getVideoTracks?.()?.filter?.(v => v.enabled)?.length);
+            },
+            audioEnabled() {
+                this.state;
+                return Boolean(this?.feed?.stream?.getAudioTracks?.()?.filter?.(v => v.enabled)?.length);
+            },
+            muted() {
+                return !this.audioEnabled;
+            },
             isMe() {
+                this.state;
                 return this.peerId === 0;
             },
             connectionState() {
-                return this.isMe ? 'connected' : (this?.remote?.connection?.connectionState || 'failed')
+                return this.isMe ? 'connected' : (this?.feed?.connection?.connectionState || 'failed')
             },
             signalingState() {
-                return this.isMe ? 'connected' : (this?.remote?.connection?.signalingState || 'failed')
+                return this.isMe ? 'connected' : (this?.feed?.connection?.signalingState || 'failed')
 
             },
             iceConnectionState() {
-                return this.isMe ? 'connected' : (this?.remote?.connection?.iceConnectionState || 'failed')
+                return this.isMe ? 'stable' : (this?.feed?.connection?.iceConnectionState || 'failed')
             },
-            muted() {
-                return this.isMe;
-            }
+
         },
         mixins: [media],
         methods: {
+            toggleVideo() {
+                this?.feed.stream?.getVideoTracks?.()?.filter(Boolean)?.forEach?.(v => { v.enabled = !v.enabled });
+                this.update();
+            },
+            toggleAudio() {
+                this?.feed?.stream?.getAudioTracks?.()?.filter(Boolean)?.forEach?.(v => { v.enabled = !v.enabled });
+                this.update();
+            },
+
             resizeScreen() {
                 /**
              * @type {HTMLVideoElement}
@@ -103,7 +160,8 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 if (!vid) return;
                 const viewer = document.querySelector('.kiwi-mediaviewer.kiwi-main-mediaviewer .kiwi-mediaviewer-content');
                 const width = viewer.getBoundingClientRect().width * 0.9;
-                if (!this.pinned) vid.width = width / Math.max(Math.min(Object.keys(this.connectedPeers).length+1, 8), 2);
+                const screenWidth = window.innerWidth;
+                if (!this.pinned) vid.width = Math.max(width / Math.max(Math.min(Object.keys(this.connectedPeers).length + 1, 8), 2), screenWidth / 4);
             },
             resizeVideo() {
                 log.debug("resizing video...");
@@ -137,35 +195,28 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 this.setWidth(rect.width + 'px')
             },
 
-            attachLocalStream() {
-                if (this.attempts.localStream >= this.maxAttempts.localStream) return;
-                this.attempts.localStream++;
-                if (!this.$refs.vid) return this.$nextTick(this.attachLocalStream);
-                if (!this.$state.localStream) return setTimeout(this.attachLocalStream, 100);
-                this.$refs.vid.srcObject = this.$state.localStream;
+            attachStream() {
+                if (this.attempts.stream >= this.maxAttempts.stream) return;
+                this.attempts.stream++;
+                if (!this.$refs.vid) return this.$nextTick(this.attachStream);
+                if (!this.feed.stream) return setTimeout(this.attachStream, 100);
+                this.$refs.vid.srcObject = this.feed.stream;
             },
-            attachRemoteStream() {
-                if (this.attempts.remoteStream >= this.maxAttempts.remoteStream) return;
-                this.attempts.remoteStream++;
-                if (!this.$refs.vid) return this.$nextTick(this.attachRemoteStream);
-                if (!this.remote?.streams?.length) return setTimeout(this.attachRemoteStream, 100);
-                this.$refs.vid.srcObject = this.remote.streams[0];
-            }
+
         },
         data() {
             return {
                 attempts: {
-                    localStream: 0,
-                    remoteStream: 0,
+                    stream: 0,
                 },
                 maxAttempts: {
-                    localStream: 32,
-                    remoteStream: 32,
+                    stream: 32,
                 }
             }
         },
 
     };
+
     const conference = {
         mixins: [media],
         components: {
@@ -192,21 +243,15 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         template: `
         <div v-resizeobserver="resize">
             <div class="peers" :key="state">
-                 <peer 
-                    class="me"
-                    :component="peer" 
-                    v-bind="{ network, buffer, peerId: 0 }" 
-                />
                 <peer
-                    v-for="(remote, id) in connectedPeers" 
+                    v-for="feed in feeds" 
                     :component="peer" 
-                    v-bind="{ network, buffer, peerId: id, remote }" 
+                    v-bind="{ network, buffer, feed }" 
                 />
             </div>
         </div>`,
 
     }
-    kiwi.svgIcons.library.add(faPhone)
     kiwi.addUi('header_channel', {
         template: `<div ref="root">
             <a @click="joinCall" title="Conference Call">
@@ -233,7 +278,8 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                         buffer: this.buffer,
                     }
                 });
-                this.$state.localStream ??= await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+                this.$state.localStreams ??= [await getUserMedia()];
+
                 if (this.$state.callState) return;
                 this.$state.callState = 'joining';
                 /**
@@ -260,6 +306,8 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     }
                 ));
                 this.$state.callState = 'joined';
+                updateConference();
+
             }
         }
     });
@@ -338,13 +386,28 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     await cnx.setLocalDescription();
                 }
             }
-        })
-        kiwi.state.localStream.getTracks().forEach(t => {
-            cnx.addTrack(t, kiwi.state.localStream);
-            updateConference();
         });
+        kiwi.state.localStreams ??= [await getUserMedia()];
+
+        setTracks(peer);
+        updateConference();
 
         return cnx;
+    }
+    /**
+     * 
+     * @param {{connection: RTCPeerConnection, tracks: RTCRtpSender[]}} peer
+     */
+    function setTracks(peer) {
+        peer.tracks ??= [];
+        peer.tracks.forEach(t => peer.connection.removeTrack(t));
+        kiwi.state.localStreams.forEach(stream => stream.getTracks().forEach(t => {
+            log.debug("adding tack", t);
+            peer.tracks.push(peer.connection.addTrack(t, stream));
+        }));
+    }
+    async function getUserMedia() {
+        return navigator.mediaDevices.getUserMedia({ audio: true, video: true });
     }
     function updateConference() {
         kiwi.state.$emit('conference-lite.update');
