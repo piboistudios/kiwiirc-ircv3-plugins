@@ -22,6 +22,9 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
     const {
         faThumbtack
     } = await import('@fortawesome/free-solid-svg-icons/faThumbtack')
+    const {
+        faCameraRotate
+    } = await import('@fortawesome/free-solid-svg-icons/faCameraRotate')
     kiwi.svgIcons.library.add(
         faPhone,
         faVideo,
@@ -29,7 +32,8 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         faMicrophone,
         faMicrophoneSlash,
         faThumbtack,
-        faThumbtackSlash
+        faThumbtackSlash,
+        faCameraRotate
     );
 
     const media = {
@@ -100,7 +104,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     class="live-vid"
                     autoplay
                     playsinline
-                    :muted="feed.id === 0" :data-user-id="feed.id"
+                    :muted="isMe" :data-user-id="feed.id"
                 >
                     <h1 class="u-link">Video element not supported in this browser</h1>
                 </video>
@@ -118,7 +122,12 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                         </span>
                         <span @click="togglePin" class="kiwi-header-option">
                             <a :title="pinned ? 'Unpin' : 'Pin'">
-                                <svg-icon :icon="!pinned ? 'thumbtack' : 'thumbtack-slash'"/>
+                                <svg-icon :icon="pinned ? 'thumbtack' : 'thumbtack-slash'"/>
+                            </a>
+                        </span>
+                        <span v-if="canFlipCam" @click="flipCameraView" class="kiwi-header-option">
+                            <a title="Flip Camera">
+                                <svg-icon icon="camera-rotate" />
                             </a>
                         </span>
                     </div>
@@ -156,9 +165,62 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 this.state;
                 return this.feed.id === 0;
             },
+            canFlipCam() {
+                /**
+                 * @todo make this actually work :)
+                 */
+                return false; 
+                if (!this.isMe) return false;
+                return this?.feed?.stream?.id && this.feed.stream.id === this.feed.streams[0].id;
+            }
         },
         mixins: [media],
         methods: {
+            async flipCameraView() {
+                /**
+                 * @type {MediaStreamTrack[]}
+                 */
+                // const tracks = this?.feed?.stream?.getVideoTracks?.() || [];
+                // if (!tracks.length) return;
+                // tracks.forEach(track => {
+
+                const settings = this.$state.mediaConstraints;
+                if (typeof settings.video !== 'object') settings.video = {};
+                settings.video.facingMode = settings.video.facingMode === 'user' ? 'environment' : 'user';
+                const stream = await getUserMedia();
+                const previousStream = this.$state.localStreams[0];
+                const tracks = stream.getTracks();
+                const previousTracks = previousStream.getTracks();
+                this.$state.localStreams[0] = stream;
+                this.$refs.vid.srcObject = stream;
+                Object.values(this.connectedPeers).forEach(p => {
+                    /**
+                     * @type {RTCPeerConnection}
+                     */
+                    const cnx = p.connection;
+                    let remove = false;
+                    cnx.getSenders().forEach(s => {
+                        
+                        const matchingTrack = previousTracks.findIndex(t => t.id === s.track.id);
+                        if (matchingTrack) {
+                            log.debug('found matching track', matchingTrack);
+                            const replacement = tracks.find(t => t.label === matchingTrack.label);
+                            if (replacement) {
+                                log.debug('found replacement track', replacement);
+                                s.replaceTrack(tracks[matchingTrackIdx]);
+                                s.setStreams(stream);
+                            } else {
+                                log.debug('no replacement found, removing track', s);
+                                cnx.removeTrack(s);
+                            }
+                        } else {
+                            log.debug("no matching track")
+                        }
+                    })
+                })
+                this.$state.emit('conference-lite.update');
+                // });
+            },
             togglePin() {
                 this.$emit('togglePin');
                 this.update();
@@ -329,7 +391,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                         buffer: this.buffer,
                     }
                 });
-                this.$state.localStreams ??= [await getUserMedia()];
+                await ensureMediaStream();
 
                 if (this.$state.callState) return;
                 this.$state.callState = 'joining';
@@ -362,6 +424,9 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
             }
         }
     });
+    async function ensureMediaStream() {
+        kiwi.state.localStreams ??= [await getUserMedia()];
+    }
     function removeNulls(o) {
         return Object.fromEntries(Object.entries(o).map(([k, v]) => [k, [null, undefined].includes(v) ? '' : v]));
     }
@@ -452,13 +517,21 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
     function setTracks(peer) {
         peer.tracks ??= [];
         peer.tracks.forEach(t => peer.connection.removeTrack(t));
+        
         kiwi.state.localStreams.forEach(stream => stream.getTracks().forEach(t => {
             log.debug("adding tack", t);
             peer.tracks.push(peer.connection.addTrack(t, stream));
         }));
     }
     async function getUserMedia() {
-        return navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        /** @type {MediaTrackConstraints}*/
+        kiwi.state.mediaConstraints ??= {
+            audio: true,
+            video: {
+                facingMode: 'environment'
+            }
+        };
+        return navigator.mediaDevices.getUserMedia(kiwi.state.mediaConstraints);
     }
     function updateConference() {
         kiwi.state.$emit('conference-lite.update');
