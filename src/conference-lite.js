@@ -127,7 +127,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
             },
             isMe() {
                 this.state;
-                return this.peerId === 0;
+                return this.feed.id === 0;
             },
             connectionState() {
                 return this.isMe ? 'connected' : (this?.feed?.connection?.connectionState || 'failed')
