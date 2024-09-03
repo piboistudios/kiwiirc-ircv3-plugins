@@ -18,6 +18,7 @@
     align-items: center;
     top: 0;
 }
+
 .video-controls {
     display: flex;
     padding: 2px;
@@ -29,6 +30,7 @@
     margin: auto;
     min-height: 3em;
 }
+
 .in-reply-to {
     margin-right: 8px;
 }
@@ -37,6 +39,7 @@
     position: relative;
     display: flex;
     flex-wrap: wrap;
+    margin: auto;
 }
 
 .vid-overlay {

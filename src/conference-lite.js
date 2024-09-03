@@ -16,12 +16,20 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
     const {
         faMicrophone
     } = await import('@fortawesome/free-solid-svg-icons/faMicrophone')
+    const {
+        faThumbtackSlash
+    } = await import('@fortawesome/free-solid-svg-icons/faThumbtackSlash')
+    const {
+        faThumbtack
+    } = await import('@fortawesome/free-solid-svg-icons/faThumbtack')
     kiwi.svgIcons.library.add(
         faPhone,
         faVideo,
         faVideoSlash,
         faMicrophone,
-        faMicrophoneSlash
+        faMicrophoneSlash,
+        faThumbtack,
+        faThumbtackSlash
     );
 
     const media = {
@@ -56,7 +64,13 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     connection: null,
                     streams: this.$state.localStreams
                 }])
-                const ret = entries.flatMap(([id, cnx]) => (cnx?.streams || []).map(stream => ({ ...cnx, id, stream })))
+                const ret = entries
+                    .flatMap(([id, cnx]) => (cnx?.streams || []).map(stream => ({ ...cnx, id, stream })))
+                    .sort((a, b) => {
+                        let _a = a.stream.id === this.$state.pinned ? -1 : 0;
+                        let _b = b.stream.id === this.$state.pinned ? -1 : 0;
+                        return _a - _b;
+                    })
                 log.debug("feeds?", ret);
                 log.debug("entries?", entries);
                 return ret;
@@ -76,11 +90,19 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         },
     }
     const peer = {
-        props: ['network', 'feed'],
+        props: ['network', 'feed', 'pinned'],
+        emits: ['togglePin',],
         template: `
             <div class="vid-container">
-                <video v-resizeobserver="resizeVideo" ref="vid"  class="live-vid" autoplay playsinline :muted="isMe" :data-user-id="feed.id">
-                    <h1 class="u-link">No Video</h1>
+                <video 
+                    v-resizeobserver="resizeVideo" 
+                    ref="vid"
+                    class="live-vid"
+                    autoplay
+                    playsinline
+                    :muted="feed.id === 0" :data-user-id="feed.id"
+                >
+                    <h1 class="u-link">Video element not supported in this browser</h1>
                 </video>
                 <div class="vid-overlay" :key="state">
                     <div class="video-controls">
@@ -92,6 +114,11 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                         <span @click="toggleAudio" class="kiwi-header-option">
                             <a :title="muted ? 'Unmute' : 'Mute'">
                                 <svg-icon :icon="!muted ? 'microphone' : 'microphone-slash'"/>
+                            </a>
+                        </span>
+                        <span @click="togglePin" class="kiwi-header-option">
+                            <a :title="pinned ? 'Unpin' : 'Pin'">
+                                <svg-icon :icon="!pinned ? 'thumbtack' : 'thumbtack-slash'"/>
                             </a>
                         </span>
                     </div>
@@ -129,39 +156,47 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 this.state;
                 return this.feed.id === 0;
             },
-            connectionState() {
-                return this.isMe ? 'connected' : (this?.feed?.connection?.connectionState || 'failed')
-            },
-            signalingState() {
-                return this.isMe ? 'connected' : (this?.feed?.connection?.signalingState || 'failed')
-
-            },
-            iceConnectionState() {
-                return this.isMe ? 'stable' : (this?.feed?.connection?.iceConnectionState || 'failed')
-            },
-
         },
         mixins: [media],
         methods: {
+            togglePin() {
+                this.$emit('togglePin');
+                this.update();
+                this.$nextTick(this.resizeScreen);
+            },
             toggleVideo() {
-                this?.feed.stream?.getVideoTracks?.()?.filter(Boolean)?.forEach?.(v => { v.enabled = !v.enabled });
+                this?.feed.stream
+                    ?.getVideoTracks?.()
+                    ?.filter(Boolean)?.forEach?.(v => { v.enabled = !v.enabled });
                 this.update();
             },
             toggleAudio() {
-                this?.feed?.stream?.getAudioTracks?.()?.filter(Boolean)?.forEach?.(v => { v.enabled = !v.enabled });
+                this?.feed?.stream
+                    ?.getAudioTracks?.()
+                    ?.filter(Boolean)?.forEach?.(v => { v.enabled = !v.enabled });
                 this.update();
             },
-
             resizeScreen() {
                 /**
              * @type {HTMLVideoElement}
              */
                 const vid = this.$refs?.vid;
                 if (!vid) return;
-                const viewer = document.querySelector('.kiwi-mediaviewer.kiwi-main-mediaviewer .kiwi-mediaviewer-content');
+                const viewer = document.querySelector(
+                    '.kiwi-mediaviewer.kiwi-main-mediaviewer .kiwi-mediaviewer-content'
+                );
                 const width = viewer.getBoundingClientRect().width * 0.9;
                 const screenWidth = window.innerWidth;
-                if (!this.pinned) vid.width = Math.max(width / Math.max(Math.min(Object.keys(this.connectedPeers).length + 1, 8), 2), screenWidth / 4);
+                if (!this.pinned)
+                    vid.width = Math.max(
+                        width /
+                        Math.max(
+                            Math.min(
+                                Object.keys(this.connectedPeers).length + 1, 8),
+                            2),
+                        screenWidth / 4
+                    );
+                else vid.width = screenWidth * 0.9;
             },
             resizeVideo() {
                 log.debug("resizing video...");
@@ -226,11 +261,24 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         methods: {
             resize() {
                 this.$state.$emit('conference-lite.resize');
+            },
+            togglePin(id) {
+                if (this.$state.pinned === id) {
+                    this.$state.pinned = null;
+                    return this.update();
+                }
+                this.$state.pinned = id;
+                this.update();
+            }
+        },
+        computed: {
+            pinned() {
+                this.state;
+                return this.$state.pinned;
             }
         },
         data() {
             return {
-                peer
             }
         },
         mounted() {
@@ -242,11 +290,14 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         },
         template: `
         <div v-resizeobserver="resize">
-            <div class="peers" :key="state">
+            <div class="peers">
                 <peer
                     v-for="feed in feeds" 
+                    :key="feed.stream.id"
                     :component="peer" 
-                    v-bind="{ network, buffer, feed }" 
+                    v-bind="{ network, buffer, feed }"
+                    :pinned="pinned===feed.stream.id"
+                    @toggle-pin="() => togglePin(feed.stream.id)"
                 />
             </div>
         </div>`,
