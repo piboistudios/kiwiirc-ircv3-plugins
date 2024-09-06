@@ -1,5 +1,5 @@
 const IrcMessage = require('irc-framework/src/ircmessage');
-
+const lodash = require('lodash');
 kiwi.plugin('conference-lite', async function (kiwi, log) {
     const {
         faPhone,
@@ -192,7 +192,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     streams: [this.$state.localStream, ...this.$state.localStreams].filter(Boolean)
                 }])
                 const ret = entries
-                    .flatMap(([id, cnx]) => (cnx?.streams || []).map(stream => ({ ...cnx, id, stream })))
+                    .flatMap(([id, cnx]) => (cnx?.streams || []).filter(s => s.active).map(stream => ({ ...cnx, id, stream })))
                     .sort((a, b) => {
                         let _a = a.stream.id === this.$state.pinned ? -1 : 0;
                         let _b = b.stream.id === this.$state.pinned ? -1 : 0;
@@ -297,6 +297,10 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 this.attachStream();
                 this.setup();
             });
+            if (!this.isMe) {
+                this.$state.peers[this.user.id].refresh ??= []
+                this.$state.peers[this.user.id].refresh.push(() => this.$nextTick(this.update.bind(this)));
+            }
             this.$state.audioContext ??= new AudioContext();
             if (!this.feed.stream.getAudioTracks().length) return;
             this.audio.source = this.$state.audioContext.createMediaStreamSource(this.feed.stream);
@@ -306,6 +310,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
 
         },
         onBeforeUnmount() {
+
             this.teardown();
         },
         computed: {
@@ -316,11 +321,11 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
             },
             videoEnabled() {
                 this.state;
-                return Boolean(this?.feed?.stream?.getVideoTracks?.()?.filter?.(v => v.enabled)?.length);
+                return Boolean(this?.feed?.stream?.getVideoTracks?.()?.filter?.(v => v.enabled && !v.muted)?.length);
             },
             audioEnabled() {
                 this.state;
-                return Boolean(this?.feed?.stream?.getAudioTracks?.()?.filter?.(v => v.enabled)?.length);
+                return Boolean(this?.feed?.stream?.getAudioTracks?.()?.filter?.(v => v.enabled && !v.muted)?.length);
             },
             muted() {
                 return !this.audioEnabled;
@@ -372,6 +377,8 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                         if (rect.width) canvas.width = rect.width;
                         // canvas.style.width = `${this.settings.videoSize.width}`;
                         canvas.style.height = `${this.settings.videoSize.height}`;
+                        const fallback = this.$refs.fallback;
+                        if (fallback) fallback.style.height = canvas.style.height;
                     }
                     const dx = canvas.width - W;
                     const dy = canvas.height - H;
@@ -404,7 +411,8 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
             },
             setupTracks() {
                 this.$state.tracks ??= [];
-                this.removeTracks();
+                this.$state.outputFeed ??= {}
+                this.feed.stream.label && this.removeTracks(this.feed.stream.label);
                 /**
                  * @type {MediaStream}
                  */
@@ -413,23 +421,24 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 this.feed.stream.getAudioTracks().forEach(t => stream.addTrack(t));
                 this.videoOutput.getVideoTracks().forEach(t => stream.addTrack(t));
                 const tracks = this.$state.tracks || [];
-                tracks.push(...stream.getTracks().map(t => ({ stream, track: t })));
+                tracks.push(...stream.getTracks().map(t => ({ stream, track: t, })));
                 updateTracks();
                 // replace output feed
-                // const idx = this.$state.localStreams.indexOf(this.$state.outputFeed);
+                // const idx = this.$state.localStreams.indexOf(this.outputFeed);
                 // if (idx !== -1) this.$state.localStreams[idx] = stream;
                 // else this.$state.localStreams.push(stream);
-                this.$state.outputFeed = stream;
+                if (this.feed.stream.label) this.$state.outputFeed[this.feed.stream.label] = stream;
                 this.$state.beginLocalStream();
             },
-            removeTracks() {
-                const tracksToRemove = this.$state.tracks.filter(({ stream, track }) => stream === this.$state.outputFeed);
+            removeTracks(label) {
+                const tracksToRemove = this.$state.tracks.filter(({ stream, track }) => stream === this.$state.outputFeed[label]);
                 tracksToRemove.forEach((i) => this.$state.tracks.splice(this.$state.tracks.indexOf(i), 1));
                 removeTracks(tracksToRemove);
             },
             teardown() {
                 cancelAnimationFrame(this.frame);
                 if (!this.isMe) return;
+                log.debug("teardown");
                 this.videoOutput.getTracks().forEach(t => {
                     t.stop();
                 });
@@ -635,6 +644,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     log.error("Failed to get display stream:", e);
                 }
                 if (stream) {
+                    stream.label = "screenshare";
                     this.$state.localStreams.push(stream);
                 }
                 updateTracks();
@@ -705,6 +715,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         methods: {
 
             async joinCall() {
+
                 kiwi.state.localStreamReady ??= new Promise((resolve, reject) => {
                     kiwi.state.beginLocalStream = resolve;
                     kiwi.state.cancelLocalStream = reject;
@@ -722,6 +733,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 updateConference();
 
                 if (this.$state.callState) return;
+
                 this.$state.callState = 'joining';
                 /**
                  * @type {import('../../kiwiirc/src/libs/state/BufferState').default}
@@ -731,6 +743,14 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                  * @type {import('../../kiwiirc/src/libs/state/NetworkState').default}
                  */
                 const net = this.network;
+                document.addEventListener("visibilitychange", function () {
+                    setTimeout(() => {
+
+                        net.ircClient.tagmsg(buf.name, {
+                            "+draft/command": "REFRESH"
+                        });
+                    }, 2000);
+                }, false);
                 await Promise.all(Object.values(buf.users).map(
                     /**
                      * 
@@ -786,10 +806,17 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
      */
     function removeTracks(tracksToRemove) {
         const peers = Object.values(kiwi.state.peers).filter(p => p.connection);
-        tracksToRemove.forEach(t => peers.forEach(peer => {
-            const sender = peer.connection.getSenders().find(s => s.track.id === t.id);
+        tracksToRemove.forEach((t) => peers.forEach(peer => {
+            const { track, stream } = t;
+            log.debug("removing track", track, "for", peer);
+            /**
+             * @type {RTCPeerConnection\}
+             */
+            const connection = peer.connection;
+            const sender = connection.getSenders().find(s => s.track && s.track.id === track.id);
+            log.debug("sender?", sender);
             if (sender) {
-                peer.connection.removeTrack(sender);
+                connection.removeTrack(sender);
             }
         }));
     }
@@ -861,7 +888,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         // kiwi.state.tracks ??= [];
 
         updateConference();
-        kiwi.state.localStreams.forEach(s => s.getAudioTracks().forEach(t => kiwi.state.tracks.push({ stream: s, track: t })))
+        // kiwi.state.localStreams.forEach(s => s.getAudioTracks().forEach(t => kiwi.state.tracks.push({ stream: s, track: t })))
         setTracks(peer);
         return cnx;
     }
@@ -874,7 +901,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
 
         kiwi.state.tracks.forEach(({ track, stream }) => {
             log.debug("adding track", track);
-            if (!peer.connection.getSenders().find(s => s.track.id === track.id)) peer.connection.addTrack(track, stream);
+            if (!peer.connection.getSenders().find(s => s.track && s.track.id === track.id)) peer.connection.addTrack(track, stream);
         });
 
     }
@@ -896,7 +923,8 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 tracks.forEach(t => t.stop());
                 await new Promise((resolve) => setTimeout(resolve, 100));
             }
-        }
+        };
+        s.label = 'cam';
         return s;
     }
     function updateConference() {
@@ -937,7 +965,9 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
 
             parsed.use(async (event_name, event, client, next) => {
                 log.debug('got event...?', event)
-                if (event_name.toUpperCase() === 'TAGMSG' && event.target === network.nick) {
+                if (event_name.toUpperCase() === 'TAGMSG') {
+                    const ignore = event.target !== network.nick && event.tags["+draft/command"] !== "REFRESH";
+                    if (ignore) return next();
                     const buf = network.bufferByName(event.nick) || kiwi.state.addBuffer(network.id, event.nick);
                     const user = network.users[event.nick.toUpperCase()];
                     const type = event.tags["+draft/command"];
@@ -949,6 +979,10 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     kiwi.state.peers[user.id] ??= mkPeer();
                     const peer = kiwi.state.peers[user.id];
                     switch (type) {
+                        case 'REFRESH': {
+                            setTimeout(lodash.throttle(() => updateConference(), 1000), 2000);
+                            return;
+                        }
                         case 'OFFER': {
 
                             peer.answer = async function () {
