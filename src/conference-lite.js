@@ -1414,7 +1414,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                             /**
                              * @type {MediaStream}
                              */
-                            const stream = streamIdx && peer.streams[streamIdx]
+                            const stream = peer.streams && streamIdx !== -1 && peer.streams[streamIdx]
                             const removeStream = rm == 1;
                             if (stream && removeStream) {
                                 peer.streams.splice(streamIdx, 1);
@@ -1434,16 +1434,15 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                             peer.streamSettings[streamId] ??= {};
                             log.debug("video settings:", { tags: event.tags, stream, streamId, peer: { ...peer } })
                             if (video !== undefined) {
-                                peer.streamSettings[streamId].videoEnabled = videoEnabled
                                 if (stream) stream.videoEnabled = videoEnabled;
+                                peer.streamSettings[streamId].videoEnabled = videoEnabled
                             }
                             if (audio !== undefined) {
-                                peer.streamSettings[streamId].audioEnabled = audioEnabled
                                 if (stream) stream.audioEnabled = audioEnabled;
+                                peer.streamSettings[streamId].audioEnabled = audioEnabled
                             }
 
                             updateConference()
-                            setTimeout(lodash.throttle(() => updateConference(), 1000), 5000);
                             return;
                         }
                         // case 'PRANSWER':s
