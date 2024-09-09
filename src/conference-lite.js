@@ -466,33 +466,6 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     }
                 }
 
-
-
-                return;
-                if (!loadVosklet) {
-                    return log.fatal("loadVosklet not found");
-                }
-                const ctx = this.$state.audioContext;
-                const micNode = this.audio.analyser;
-
-                // Load Voskconst module, model and recognizer
-                const module = await loadVosklet()
-                const model = await module.createModel("https://ccoreilly.github.io/vosk-browser/models/vosk-model-small-en-us-0.15.tar.gz", "English", "vosk-model-small-en-us-0.15")
-                const recognizer = await module.createRecognizer(model, 16000)
-
-                // Listen for result and partial result
-                recognizer.addEventListener("result", ev => log.debug("Vosk Result: ", ev.detail))
-                recognizer.addEventListener("partialResult", ev => log.debug("Vosk Partial result: ", ev.detail))
-
-                // Create a transferer node to get audio data on the main thread
-                const transferer = await module.createTransferer(ctx, 128 * 150)
-
-                // Recognize data on arrival
-                transferer.port.onmessage = ev => recognizer.acceptWaveform(ev.data)
-
-                // Connect to microphone
-                micNode.connect(transferer)
-
             },
             setup() {
                 /**
@@ -586,21 +559,6 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     const dx = canvas.width - W;
                     const dy = canvas.height - H;
                     ctx.drawImage(cam, dx / 2, dy / 2, W, H);
-                    // if (isMe) {
-
-                    //     ctx.fillStyle = 'red';
-                    //     ctx.beginPath()
-                    //     ctx.rect(W / 2, H / 2, W / 4, H / 4);
-                    //     ctx.fill();
-                    //     ctx.strokeStyle = 'yellow';
-                    //     ctx.font = '50px Ubuntu';
-                    //     ctx.lineWidth = 4;
-                    //     ctx.beginPath();
-                    //     ctx.strokeText(this.user.nick, W / 2, H / 2);
-                    //     ctx.stroke()
-                    //     ctx.closePath();
-                    //     ctx.fill()
-                    // }
                 }
                 draw();
                 if (!this.isMe) return;
@@ -621,12 +579,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 // replace video track with video output
                 this.feed.stream.getAudioTracks().forEach(t => stream.addTrack(t));
                 this.videoOutput.getVideoTracks().forEach(t => stream.addTrack(t));
-                // const tracks = this.$state.tracks || [];
-                // tracks.push(...stream.getTracks().map(t => ({ stream, track: t, })));
-                // replace output feed
-                // const idx = this.$state.localStreams.indexOf(this.outputFeed);
-                // if (idx !== -1) this.$state.localStreams[idx] = stream;
-                // else this.$state.localStreams.push(stream);
+
                 const label = this.feed.stream.network_label;
                 if (this.isMe && label) this.$state.outputFeeds[label] = stream;
                 updateTracks();
@@ -656,39 +609,13 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
 
 
                     this.$state.mediaConstraints.video.facingMode = originalFacing === 'user' ? 'environment' : 'user';
-                    const removals = [];
-                    /**
-                     * @type {MediaStream}
-                     */
-                    // this.$state.localStream.getTracks().forEach(t => {
-                    //     t.stop();
-                    // });
-                    // this.removeTracks();
-                    // this.setStream(null);
-                    // this.audio.source.disconnect();
-                    // await new Promise((resolve, reject) => {
-                    //     const check = () => {
-                    //         const allStopped = this.$state.localStream.getTracks().every(t => {
-                    //             const r = t.readyState === 'ended'
-                    //             !r && t.stop();
-                    //             return r;
-                    //         });
-                    //         allStopped && resolve();
-                    //         !allStopped && this.$nextTick(check);
-                    //     }
-                    //     check();
-                    // });
                     await this.$state.endMediaStream();
                     const stream = await getUserMedia();
                     this.$state.localStream = stream;
                     this.$state.emit('conference-lite.update');
-                    // alert(`it took ${attempt} attempts to flip cam :)`)
                 } catch (e) {
                     log.error("Failed to flip camera:", e, e.stack);
-                    // alert(e.toString());
-                    // this.$state.addMessage(this.buffer, {
-                    //     message: e.toString()
-                    // })
+
                     this.$state.mediaConstraints.video.facingMode = originalFacing;
                     setTimeout(() => this.flipCameraView(++attempt));
                 } finally {
@@ -1495,23 +1422,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                             updateConference()
                             return;
                         }
-                        // case 'PRANSWER':s
-                        //     // alert('answering');
-                        //     const cnx = peer.connection;
-                        //     log.debug("cnx", cnx);
-                        //     if (cnx) {
-                        //         await cnx.setRemoteDescription({
-                        //             type: 'answer',
-                        //             sdp
-                        //         });
-                        //         log.debug('remote desc set', sdp);
-                        //         peer.connected = true;
-                        //     }
-                        //     else {
-                        //         log.error("Received an answer for non existent call:", { event, user, peers: kiwi.state.peers })
-                        //     }
-                        //     break;
-                        // }
+                      
                         case 'ANSWER':
                         case 'OFFER': {
                             if (!kiwi.state.callState) return;
