@@ -18,7 +18,13 @@
     align-items: center;
     top: 0;
 }
-
+.conference-volume-indicator {
+    fill: white;
+}
+.volume-indicator {
+    position: absolute;
+    transition: all ease-in-out 0.3s;
+}
 .video-controls {
     display: flex;
     opacity: 0;

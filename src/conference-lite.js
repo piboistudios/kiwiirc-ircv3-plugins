@@ -283,6 +283,14 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                         v-show="!videoEnabled"
                         ref="fallback"
                     >
+                        <div ref="volumeIndicator" class="kiwi-userbox-avatar volume-indicator" style="
+                            opacity: 0;
+                            transform: scale(0);
+                        ">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" class="kiwi-avatar">
+                                <circle r="40" cx="50" cy="50" class="conference-volume-indicator"><!--v-if--></circle>
+                            </svg>
+                        </div>
                         <div class="kiwi-userbox-avatar">
                             <user-avatar
                                 :network="network"
@@ -300,6 +308,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     />
                         <div class="video-info">
                             <audio-visualization
+                                ref="audioOutput"
                                 v-if="audio.analyser"
                                 :analyser="audio.analyser"
                                 :bar-width="8"
@@ -496,18 +505,48 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 const ctx = canvas.getContext('2d');
                 this.screen = cam.getBoundingClientRect();
                 const isMe = this.isMe;
-                let prev;
+                let volume = 0;
+                const prev = {};
                 const draw = async (timestamp) => {
                     this.frame = requestAnimationFrame(draw);
                     let elapsed;
-                    if (prev) {
-                        elapsed = timestamp - prev;
+                    if (prev.main) {
+                        elapsed = timestamp - prev.main;
                     } else {
-                        prev = timestamp;
+                        prev.main = timestamp;
                     }
+                    const audioOutput = this.$refs.audioOutput;
+                    const volumeIndicator = this.$refs.volumeIndicator;
+                    /**
+                        * @type {Uint8Array}
+                        */
+                    const buf = audioOutput.buffer;
+                    const data = [...buf.values()].map(d => (d - 128) ** 4);
+                    log.debug("audio buf", data);
+                    const avg = data.reduce((avg, d) => avg += d / data.length, 0);
+                    const newVolume = avg / 128;
+                    volume = (!volume || newVolume > volume) ? newVolume : volume - (volume / 8);
                     if (!elapsed || elapsed < (1000 / this.settings.frameRate)) return;
+                    prev.main = timestamp;
+
+
+                    
+                    if (audioOutput && volumeIndicator) {
+                        let elapsed;
+                        if (prev.volumeIndicator) {
+                            elapsed = timestamp - prev.volumeIndicator
+                        } else {
+                            prev.volumeIndicator = timestamp;
+                        }
+                        if (!elapsed || elapsed < (1000 / this.settings.volumeUpdateRate)) return;
+                        prev.volumeIndicator = timestamp;
+
+                        const percent = volume;
+                        volumeIndicator.style.transform = `scale(${Math.min(((percent)), 2)})`;
+                        volumeIndicator.style.opacity = Math.min(percent, 0.6);
+
+                    }
                     // log.debug("elapsed:", elapsed);
-                    prev = timestamp;
                     const W = cam.videoWidth;
                     const H = cam.videoHeight;
                     if (!this.videoEnabled) return ctx.clearRect(0, 0, W, H);
@@ -732,7 +771,8 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
             return {
                 flippingCam: false,
                 settings: {
-                    frameRate: 12.5,
+                    frameRate: 30,
+                    volumeUpdateRate: 8,
                     videoSize: {
                         height: '256px',
                         width: '256px'
