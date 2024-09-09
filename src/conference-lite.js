@@ -452,7 +452,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                         stop();
                     }
                 }
-                
+
 
 
                 return;
@@ -493,8 +493,18 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 const ctx = canvas.getContext('2d');
                 this.screen = cam.getBoundingClientRect();
                 const isMe = this.isMe;
-                const draw = async () => {
+                let prev;
+                const draw = async (timestamp) => {
                     this.frame = requestAnimationFrame(draw);
+                    let elapsed;
+                    if (prev) {
+                        elapsed = timestamp - prev;
+                    } else {
+                        prev = timestamp;
+                    }
+                    if (!elapsed || elapsed < (1000 / this.settings.frameRate)) return;
+                    log.debug("elapsed:", elapsed);
+                    prev = timestamp;
                     const W = cam.videoWidth;
                     const H = cam.videoHeight;
                     const rect = cam.getBoundingClientRect();
@@ -548,7 +558,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 draw();
                 this.$nextTick(this.resizeScreen);
                 if (!this.isMe) return;
-                this.videoOutput = canvas.captureStream();
+                this.videoOutput = canvas.captureStream(this.settings.frameRate);
                 this.setupTracks();
 
 
@@ -649,15 +659,25 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 const enabled = !this.videoEnabled;
                 this?.feed.stream
                     ?.getVideoTracks?.()
-                    ?.filter(Boolean)?.forEach?.(v => { v.enabled = !v.enabled });
-                setVideo({ net: this.network, buf: this.buffer, stream: this.feed.stream }, enabled);
+                    ?.filter(Boolean)?.forEach?.(v => { v.enabled = enabled && !v.enabled });
+                if (this.isMe) {
+
+                    setVideo({ net: this.network, buf: this.buffer, stream: this.$state?.outputFeed?.[this.feed.stream.label] }, enabled);
+                    this.videoEnabled = enabled;
+                }
                 this.update();
             },
             toggleAudio() {
+                const enabled = !this.audioEnabled;
+
                 this?.feed?.stream
                     ?.getAudioTracks?.()
-                    ?.filter(Boolean)?.forEach?.(v => { v.enabled = !v.enabled });
-                setAudio({ net: this.network, buf: this.buffer, stream: this.feed.stream }, enabled);
+                    ?.filter(Boolean)?.forEach?.(v => { v.enabled = enabled && !v.enabled });
+                if (this.isMe) {
+
+                    setAudio({ net: this.network, buf: this.buffer, stream: this.$state?.outputFeed?.[this.feed.stream.label] }, enabled);
+                    this.audioEnabled = enabled;
+                }
                 this.update();
             },
             resizeScreen() {
@@ -735,6 +755,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
             return {
                 flippingCam: false,
                 settings: {
+                    frameRate: 12.5,
                     videoSize: {
                         height: '256px',
                         width: '256px'
@@ -820,7 +841,9 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 this.update();
             },
             async leaveCall() {
-
+                typeof this.$state.outputFeed === 'object' && Object.values(this.$state.outputFeed).forEach(s => {
+                    s.getTracks().forEach(t => t.stop() && s.removeTrack(t));
+                });
                 [this.$state.localStream, ...(this.$state.localStreams || [])].filter(Boolean).forEach(
                     /**
                      * 
@@ -1231,6 +1254,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         if (!peer) return;
         peer.connected = false;
         if (!peer.connection) return;
+        peer.connection.getSenders().forEach(t => peer.connection.removeTrack(t));
         peer.connection.close()
         updateConference();
     }
