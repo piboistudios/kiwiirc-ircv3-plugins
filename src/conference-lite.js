@@ -148,6 +148,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 fg = vars.getPropertyValue("--brand-notice");
             });
             const draw = () => {
+                if (!this) return;
                 this.frame = requestAnimationFrame(draw);
                 /**
                * @type {AnalyserNode}
@@ -508,6 +509,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 let volume = 0;
                 const prev = {};
                 const draw = async (timestamp) => {
+                    if (!this.feed || !this.$refs.cam) return;
                     this.frame = requestAnimationFrame(draw);
                     let elapsed;
                     if (prev.main) {
@@ -517,20 +519,22 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     }
                     const audioOutput = this.$refs.audioOutput;
                     const volumeIndicator = this.$refs.volumeIndicator;
-                    /**
-                        * @type {Uint8Array}
-                        */
-                    const buf = audioOutput.buffer;
-                    const data = [...buf.values()].map(d => (d - 128) ** 4);
-                    log.debug("audio buf", data);
-                    const avg = data.reduce((avg, d) => avg += d / data.length, 0);
-                    const newVolume = avg / 128;
-                    volume = (!volume || newVolume > volume) ? newVolume : volume - (volume / 8);
+                    if (audioOutput && volumeIndicator) {
+
+                        /**
+                            * @type {Uint8Array}
+                            */
+                        const buf = audioOutput.buffer;
+                        const data = [...buf.values()].map(d => (d - 128) ** 4);
+                        const avg = data.reduce((avg, d) => avg += d / data.length, 0);
+                        const newVolume = avg / 128;
+                        volume = (!volume || newVolume > volume) ? newVolume : volume - (volume / 8);
+                    }
                     if (!elapsed || elapsed < (1000 / this.settings.frameRate)) return;
                     prev.main = timestamp;
 
 
-                    
+
                     if (audioOutput && volumeIndicator) {
                         let elapsed;
                         if (prev.volumeIndicator) {
@@ -772,7 +776,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 flippingCam: false,
                 settings: {
                     frameRate: 30,
-                    volumeUpdateRate: 8,
+                    volumeUpdateRate: 30,
                     videoSize: {
                         height: '256px',
                         width: '256px'
@@ -1356,9 +1360,11 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         updateConference();
         log.debug("peer removed");
     }
+    const nickUserId = {};
     function getPeer(nick) {
-        const user = network.users[nick.toUpperCase()];
+        const user = network.users[nick.toUpperCase()] || nickUserId[nick];
         const peer = kiwi.state?.peers?.[user.id];
+        nickUserId[nick] = user.id;
         return peer;
     }
     function mkPeer(id) {
@@ -1404,15 +1410,19 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     removePeer(peer);
                 }
                 if (event_name === 'part') {
-                    if (event.target === kiwi.state.meetingChannel) {
+                    if (event.channel === kiwi.state.meetingChannel) {
                         const peer = getPeer(event.nick);
                         removePeer(peer);
                     }
                 }
                 if (event_name === 'mode') {
-                    const meetingMode = event.modes.find(m => m.mode === '-x');
-                    const peer = getPeer(event.nick);
-                    removePeer(peer);
+                    const leaveMeetingMode = event.modes.find(m => m.mode === '-x');
+                    log.debug("got mode", event.modes);
+                    if (leaveMeetingMode) {
+
+                        const peer = getPeer(event.nick);
+                        removePeer(peer);
+                    }
                 }
                 if (event_name.toUpperCase() === 'TAGMSG') {
                     const ignore = event.target !== network.nick && event.tags["+draft/conf-cmd"] !== "SETTINGS";
