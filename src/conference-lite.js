@@ -1,5 +1,6 @@
 const IrcMessage = require('irc-framework/src/ircmessage');
 const lodash = require('lodash');
+const bodySegmentation = require('@tensorflow-models/body-segmentation')
 kiwi.plugin('conference-lite', async function (kiwi, log) {
     const {
         faPhone,
@@ -28,6 +29,18 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
     const {
         faPersonChalkboard
     } = await import('@fortawesome/free-solid-svg-icons/faPersonChalkboard')
+    const {
+        faImage
+    } = await import('@fortawesome/free-solid-svg-icons/faImage')
+    const {
+        faMessage
+    } = await import('@fortawesome/free-solid-svg-icons/faMessage')
+    const {
+        faComment
+    } = await import('@fortawesome/free-solid-svg-icons/faComment')
+    const {
+        faCommentSlash
+    } = await import('@fortawesome/free-solid-svg-icons/faCommentSlash')
     kiwi.svgIcons.library.add(
         faPhone,
         faVideo,
@@ -37,8 +50,18 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         faThumbtack,
         faThumbtackSlash,
         faCameraRotate,
-        faPersonChalkboard
+        faPersonChalkboard,
+        faImage,
+        faMessage,
+        faComment,
+        faCommentSlash
     );
+    kiwi.state.isMobile = (function () {
+        let check = false;
+        (function (a) { if (/(android|bb\d+|meego).+mobile|avantgo|bada\/|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od)|iris|kindle|lge |maemo|midp|mmp|mobile.+firefox|netfront|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|series(4|6)0|symbian|treo|up\.(browser|link)|vodafone|wap|windows ce|xda|xiino/i.test(a) || /1207|6310|6590|3gso|4thp|50[1-6]i|770s|802s|a wa|abac|ac(er|oo|s\-)|ai(ko|rn)|al(av|ca|co)|amoi|an(ex|ny|yw)|aptu|ar(ch|go)|as(te|us)|attw|au(di|\-m|r |s )|avan|be(ck|ll|nq)|bi(lb|rd)|bl(ac|az)|br(e|v)w|bumb|bw\-(n|u)|c55\/|capi|ccwa|cdm\-|cell|chtm|cldc|cmd\-|co(mp|nd)|craw|da(it|ll|ng)|dbte|dc\-s|devi|dica|dmob|do(c|p)o|ds(12|\-d)|el(49|ai)|em(l2|ul)|er(ic|k0)|esl8|ez([4-7]0|os|wa|ze)|fetc|fly(\-|_)|g1 u|g560|gene|gf\-5|g\-mo|go(\.w|od)|gr(ad|un)|haie|hcit|hd\-(m|p|t)|hei\-|hi(pt|ta)|hp( i|ip)|hs\-c|ht(c(\-| |_|a|g|p|s|t)|tp)|hu(aw|tc)|i\-(20|go|ma)|i230|iac( |\-|\/)|ibro|idea|ig01|ikom|im1k|inno|ipaq|iris|ja(t|v)a|jbro|jemu|jigs|kddi|keji|kgt( |\/)|klon|kpt |kwc\-|kyo(c|k)|le(no|xi)|lg( g|\/(k|l|u)|50|54|\-[a-w])|libw|lynx|m1\-w|m3ga|m50\/|ma(te|ui|xo)|mc(01|21|ca)|m\-cr|me(rc|ri)|mi(o8|oa|ts)|mmef|mo(01|02|bi|de|do|t(\-| |o|v)|zz)|mt(50|p1|v )|mwbp|mywa|n10[0-2]|n20[2-3]|n30(0|2)|n50(0|2|5)|n7(0(0|1)|10)|ne((c|m)\-|on|tf|wf|wg|wt)|nok(6|i)|nzph|o2im|op(ti|wv)|oran|owg1|p800|pan(a|d|t)|pdxg|pg(13|\-([1-8]|c))|phil|pire|pl(ay|uc)|pn\-2|po(ck|rt|se)|prox|psio|pt\-g|qa\-a|qc(07|12|21|32|60|\-[2-7]|i\-)|qtek|r380|r600|raks|rim9|ro(ve|zo)|s55\/|sa(ge|ma|mm|ms|ny|va)|sc(01|h\-|oo|p\-)|sdk\/|se(c(\-|0|1)|47|mc|nd|ri)|sgh\-|shar|sie(\-|m)|sk\-0|sl(45|id)|sm(al|ar|b3|it|t5)|so(ft|ny)|sp(01|h\-|v\-|v )|sy(01|mb)|t2(18|50)|t6(00|10|18)|ta(gt|lk)|tcl\-|tdg\-|tel(i|m)|tim\-|t\-mo|to(pl|sh)|ts(70|m\-|m3|m5)|tx\-9|up(\.b|g1|si)|utst|v400|v750|veri|vi(rg|te)|vk(40|5[0-3]|\-v)|vm40|voda|vulc|vx(52|53|60|61|70|80|81|83|85|98)|w3c(\-| )|webc|whit|wi(g |nc|nw)|wmlb|wonu|x700|yas\-|your|zeto|zte\-/i.test(a.substr(0, 4))) check = true; })(navigator.userAgent || navigator.vendor || window.opera);
+        return check;
+    })();
+
     const controlBtn = {
         props: {
             title: String,
@@ -171,7 +194,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 return Object.fromEntries(Object.entries(this.peers).filter(([_, peer]) => {
                     log.debug("filtering peers?", "k", _, "v", peer);
                     log.debug("connected?", peer.connected);
-                    return peer.connection.connectionState === 'connected';
+                    return peer?.connection?.connectionState === 'connected';
                 }));
             },
             connectingPeers() {
@@ -179,7 +202,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 return Object.fromEntries(Object.entries(this.peers).filter(([_, peer]) => {
                     log.debug("filtering peers?", "k", _, "v", peer);
                     log.debug("connected?", peer.connected);
-                    return peer.connection.connectionState === 'connecting';
+                    return peer?.connection?.connectionState === 'connecting';
                 }));
             },
             feeds() {
@@ -297,6 +320,15 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 this.attachStream();
                 this.setup();
             });
+            /**
+             * @type {MediaStream}
+             */
+            const stream = this.feed.stream
+            stream.getTracks()
+                .forEach(t => {
+                    t.onmute = e => setVideo({ stream, buf: this.buffer, net: this.network }, false);
+                    t.onunmute = e => setVideo({ stream, buf: this.buffer, net: this.network }, true);
+                });
             if (!this.isMe) {
                 this.$state.peers[this.user.id].refresh ??= []
                 this.$state.peers[this.user.id].refresh.push(() => this.$nextTick(this.update.bind(this)));
@@ -306,6 +338,8 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
             this.audio.source = this.$state.audioContext.createMediaStreamSource(this.feed.stream);
             this.audio.analyser = this.$state.audioContext.createAnalyser();
             this.audio.source.connect(this.audio.analyser);
+            this.setupTranscription();
+
 
 
         },
@@ -321,14 +355,17 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
             },
             videoEnabled() {
                 this.state;
-                return Boolean(this?.feed?.stream?.getVideoTracks?.()?.filter?.(v => v.enabled && !v.muted)?.length);
+                return this.feed.stream.videoEnabled !== false && Boolean(this?.feed?.stream?.getVideoTracks?.()?.filter?.(v => v.enabled && !v.muted)?.length);
             },
             audioEnabled() {
                 this.state;
-                return Boolean(this?.feed?.stream?.getAudioTracks?.()?.filter?.(v => v.enabled && !v.muted)?.length);
+                return this.feed.stream.audioEnabled !== false && Boolean(this?.feed?.stream?.getAudioTracks?.()?.filter?.(v => v.enabled && !v.muted)?.length);
             },
             muted() {
                 return !this.audioEnabled;
+            },
+            isMyCam() {
+                return this.isMe && this.feed.stream === this.$state.localStream;
             },
             isMe() {
                 this.state;
@@ -339,7 +376,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                  * @todo make this actually work :)
                  */
                 // return false;
-                if (!this.isMe) return false;
+                if (!kiwi.state.isMobile || !this.isMe) return false;
                 return this?.feed?.stream?.id && this.feed.stream.id === this.feed.streams[0].id;
             }
         },
@@ -347,14 +384,103 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         watch: {
             pinned(n, o) {
                 if (n) {
-                    this.settings.videoSize.width = "auto";
-                    this.settings.videoSize.height = "auto";
+                    this.settings.videoSize.width = this.$refs?.cam?.videoWidth + 'px' || "auto";
+                    this.settings.videoSize.height = this.$refs?.cam?.videoHeight + 'px' || "auto";
                 } else {
                     this.settings.videoSize = { ...this.defaults.videoSize };
                 }
             }
         },
         methods: {
+            async setupTranscription() {
+                /**
+                       * @type {import('../../kiwiirc/src/libs/state/BufferState').default}
+                       */
+                const buf = this.buffer;
+                /**
+                 * @type {import('../../kiwiirc/src/libs/state/NetworkState').default}
+                 */
+                const net = this.network;
+                /**
+                 * @type {import('@types/dom-speech-recognition')}
+                 */
+                const stupidTypeHack = null;
+
+                const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+                this.$state.recognition = recognition;
+                recognition.continuous = true;
+                recognition.lang = "en-US";
+                recognition.interimResults = true;
+                recognition.maxAlternatives = 10;
+                const stop = () => {
+                    recognition.started = null;
+                    this.$state.transcriptionsEnabled = false;
+                    updateConference();
+                }
+                recognition.onspeechstart = (event) => {
+                    log.debug("onspeechstart:", event);
+                };
+                recognition.onspeechend = (event) => {
+                    log.debug("onspeechend:", event);
+                    // recognition.
+
+                };
+                recognition.onstart = () => {
+                    recognition.started = Date.now();
+                }
+                recognition.onresult = (event) => {
+                    log.debug("onresult:", event);
+                    if (this.$state.transcriptionsEnabled && event.results[event.resultIndex].isFinal) {
+                        net.ircClient.action(buf.name, `said: "${event.results[event.resultIndex][0].transcript}"`);
+                        stop();
+                    }
+                };
+                const restart = lodash.debounce(() => {
+                    if (!this.$state.callState) return;
+                    if (!this.$state.transcriptionsEnabled) return;
+                    recognition.abort();
+                    setTimeout(recognition.start.bind(recognition), 250);
+                }, 250);
+                recognition.restart = restart;
+                recognition.onnomatch = event => {
+                    stop();
+                }
+
+                recognition.onend = event => {
+                    log.debug('onend:', event);
+                    if (recognition.started && (Date.now() - recognition.started) > 2000) {
+                        stop();
+                    }
+                }
+                
+
+
+                return;
+                if (!loadVosklet) {
+                    return log.fatal("loadVosklet not found");
+                }
+                const ctx = this.$state.audioContext;
+                const micNode = this.audio.analyser;
+
+                // Load Voskconst module, model and recognizer
+                const module = await loadVosklet()
+                const model = await module.createModel("https://ccoreilly.github.io/vosk-browser/models/vosk-model-small-en-us-0.15.tar.gz", "English", "vosk-model-small-en-us-0.15")
+                const recognizer = await module.createRecognizer(model, 16000)
+
+                // Listen for result and partial result
+                recognizer.addEventListener("result", ev => log.debug("Vosk Result: ", ev.detail))
+                recognizer.addEventListener("partialResult", ev => log.debug("Vosk Partial result: ", ev.detail))
+
+                // Create a transferer node to get audio data on the main thread
+                const transferer = await module.createTransferer(ctx, 128 * 150)
+
+                // Recognize data on arrival
+                transferer.port.onmessage = ev => recognizer.acceptWaveform(ev.data)
+
+                // Connect to microphone
+                micNode.connect(transferer)
+
+            },
             setup() {
                 /**
                  * @type {HTMLCanvasElement}
@@ -380,24 +506,44 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                         const fallback = this.$refs.fallback;
                         if (fallback) fallback.style.height = canvas.style.height;
                     }
+                    if (this.isMyCam) {
+
+                        if (cam.videoWidth && cam.videoHeight && canvas.width && rect.width && rect.height && canvas.height && this.$state.backgroundFx) {
+                            /**
+                             * @type {import('@tensorflow-models/body-segmentation').BodySegmenter}
+                            */
+                            const segmenter = this.$state.segmenter;
+                            const segmentation = await segmenter.segmentPeople(cam)
+                            if (this.$state.backgroundFx.type === 'binaryMask') {
+                                const mask = await bodySegmentation.toBinaryMask(segmentation, this.$state.backgroundFx.fg, this.$state.backgroundFx.bg, this.$state.backgroundFx.drawCountour || false, this.$state.backgroundFx.foregroundThreshold)
+                                await bodySegmentation.drawMask(canvas, cam, mask, this.$state.backgroundFx.maskOpacity, this.$state.backgroundFx.maskBlur)
+                            } else if (this.$state.backgroundFx.type === 'bokeh') {
+                                await bodySegmentation.drawBokehEffect(
+                                    canvas, cam, segmentation, this.$state.backgroundFx.foregroundThreshold,
+                                    this.$state.backgroundFx.backgroundBlur, this.$state.backgroundFx.edgeBlur);
+                            }
+                            return;
+
+                        }
+                    }
                     const dx = canvas.width - W;
                     const dy = canvas.height - H;
                     ctx.drawImage(cam, dx / 2, dy / 2, W, H);
-                    if (isMe) {
+                    // if (isMe) {
 
-                        ctx.fillStyle = 'red';
-                        ctx.beginPath()
-                        ctx.rect(W / 2, H / 2, W / 4, H / 4);
-                        ctx.fill();
-                        ctx.strokeStyle = 'yellow';
-                        ctx.font = '50px Ubuntu';
-                        ctx.lineWidth = 4;
-                        ctx.beginPath();
-                        ctx.strokeText(this.user.nick, W / 2, H / 2);
-                        ctx.stroke()
-                        ctx.closePath();
-                        ctx.fill()
-                    }
+                    //     ctx.fillStyle = 'red';
+                    //     ctx.beginPath()
+                    //     ctx.rect(W / 2, H / 2, W / 4, H / 4);
+                    //     ctx.fill();
+                    //     ctx.strokeStyle = 'yellow';
+                    //     ctx.font = '50px Ubuntu';
+                    //     ctx.lineWidth = 4;
+                    //     ctx.beginPath();
+                    //     ctx.strokeText(this.user.nick, W / 2, H / 2);
+                    //     ctx.stroke()
+                    //     ctx.closePath();
+                    //     ctx.fill()
+                    // }
                 }
                 draw();
                 this.$nextTick(this.resizeScreen);
@@ -500,15 +646,18 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
 
             },
             toggleVideo() {
+                const enabled = !this.videoEnabled;
                 this?.feed.stream
                     ?.getVideoTracks?.()
                     ?.filter(Boolean)?.forEach?.(v => { v.enabled = !v.enabled });
+                setVideo({ net: this.network, buf: this.buffer, stream: this.feed.stream }, enabled);
                 this.update();
             },
             toggleAudio() {
                 this?.feed?.stream
                     ?.getAudioTracks?.()
                     ?.filter(Boolean)?.forEach?.(v => { v.enabled = !v.enabled });
+                setAudio({ net: this.network, buf: this.buffer, stream: this.feed.stream }, enabled);
                 this.update();
             },
             resizeScreen() {
@@ -636,6 +785,26 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 this.$state.pinned = id;
                 this.update();
             },
+            toggleBackgroundBlur() {
+                if (this.$state.backgroundFx) {
+                    this.$state.backgroundFx = null;
+                }
+                this.$state.backgroundFx = {
+                    fg: { r: 0, g: 0, b: 0, a: 0 },
+                    bg: { r: 0, g: 0, b: 255, a: 255 },
+                    foregroundThreshold: 0.5,
+                    maskOpacity: 1,
+                    maskBlur: 0,
+                    type: 'binaryMask',
+                    backgroundBlur: 100,
+                    edgeBlur: 3,
+                }
+            },
+            toggleTranscriptions() {
+                this.$state.transcriptionsEnabled = !this.$state.transcriptionsEnabled;
+                this.$state?.recognition?.restart instanceof Function && this.$state?.recognition?.restart?.()
+                this.update();
+            },
             async screenShare() {
                 let stream;
                 try {
@@ -650,11 +819,65 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 updateTracks();
                 this.update();
             },
+            async leaveCall() {
+
+                [this.$state.localStream, ...(this.$state.localStreams || [])].filter(Boolean).forEach(
+                    /**
+                     * 
+                     * @param {MediaStream} s 
+                     */
+                    s => {
+                        s.getTracks().forEach(t => t.stop() && s.removeTrack(t));
+                    });
+                delete this.$state.localStream;
+                /**
+           * @type {import('../../kiwiirc/src/libs/state/BufferState').default}
+           */
+                const buf = this.buffer;
+                /**
+                 * @type {import('../../kiwiirc/src/libs/state/NetworkState').default}
+                 */
+                const net = this.network;
+                this.$state.emit('mediaviewer.hide');
+                net.ircClient.mode(buf.name, '-x', net.nick);
+                Object.entries(this.$state.peers).forEach(([id, peer]) => {
+                    /**
+                     * @type {RTCPeerConnection}
+                     */
+                    const cnx = peer.connection;
+                    cnx && cnx.close();
+                });
+                this.$state.peers = {};
+                this.$state.callState = null;
+                if (this.$state.recognition) {
+                    /**
+                     * @type {SpeechRecognition}
+                     */
+                    const recognition = this.$state.recognition;
+                    recognition.abort();
+                    recognition.stop();
+                    recognition.onresult = null;
+                    recognition.onstart = null;
+                    recognition.onend = null;
+                    recognition.onspeechstart = null;
+                    recognition.onspeechend = null;
+                    recognition.onaudioend = null;
+                    recognition.onaudiostart = null;
+                    recognition.onnomatch = null;
+                    recognition.onsoundend = null;
+                    recognition.onsoundstart = null;
+                }
+                this.update();
+            },
         },
         computed: {
             pinned() {
                 this.state;
                 return this.$state.pinned;
+            },
+            transcriptionsEnabled() {
+                this.state;
+                return this.$state.transcriptionsEnabled;
             }
         },
         data() {
@@ -678,7 +901,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 <div class="conference-controls">
                     <div class="conference-controlbar">
                         <control-btn
-                            @click="hangup"
+                            @click="leaveCall"
                             icon="phone"
                             title="Leave Call"
                             text-class="u-button-warning"
@@ -687,10 +910,20 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                         
                         <control-btn
                             @click="screenShare"
-                            icon="gear"
+                            icon="person-chalkboard"
                             title="Screen Share"
                             text-class="u-button-primary"
                         />  
+                        <control-btn
+                            @click="toggleTranscriptions"
+                            :icon="transcriptionsEnabled ? 'comment' : 'comment-slash'"
+                            title="Toggle Transcriptions"
+                        />  
+                        <control-btn
+                            @click="toggleBackgroundBlur"
+                            icon="image"
+                            title="Background Blur"
+                        />
                     </div>
                 </div>
             </div>
@@ -715,7 +948,19 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         methods: {
 
             async joinCall() {
-
+                this.$state.segmenter ??= await bodySegmentation.createSegmenter(bodySegmentation.SupportedModels.MediaPipeSelfieSegmentation, {
+                    runtime: 'mediapipe',
+                    solutionPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation',
+                    modelType: 'general'
+                });
+                /**
+                    * @type {import('../../kiwiirc/src/libs/state/BufferState').default}
+                    */
+                const buf = this.buffer;
+                /**
+                 * @type {import('../../kiwiirc/src/libs/state/NetworkState').default}
+                 */
+                const net = this.network;
                 kiwi.state.localStreamReady ??= new Promise((resolve, reject) => {
                     kiwi.state.beginLocalStream = resolve;
                     kiwi.state.cancelLocalStream = reject;
@@ -731,25 +976,16 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 });
                 await ensureLocalStream();
                 updateConference();
+                this.$state.meetingChannel = buf.name;
 
                 if (this.$state.callState) return;
 
                 this.$state.callState = 'joining';
-                /**
-                 * @type {import('../../kiwiirc/src/libs/state/BufferState').default}
-                 */
-                const buf = this.buffer;
-                /**
-                 * @type {import('../../kiwiirc/src/libs/state/NetworkState').default}
-                 */
-                const net = this.network;
-                document.addEventListener("visibilitychange", function () {
-                    setTimeout(() => {
 
-                        net.ircClient.tagmsg(buf.name, {
-                            "+draft/command": "REFRESH"
-                        });
-                    }, 2000);
+                net.ircClient.mode(buf.name, '+x', net.nick);
+                document.addEventListener("visibilitychange", function () {
+
+                    setVideo({ net, buf, stream: this.$state.localStream }, document.visibilityState === 'visible');
                 }, false);
                 await Promise.all(Object.values(buf.users).map(
                     /**
@@ -760,6 +996,10 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                         log.debug("connecting to...", u);
 
                         if (u.nick === net.nick || this.$state.peers[u.id]) return;
+                        if (!u.buffers[buf.id]?.modes.includes('x')) {
+                            log.debug("user not in call, skipping", u);
+                            return;
+                        }
                         /**
                          * @todo check if user modes
                          */
@@ -792,13 +1032,21 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
      */
     async function negotiate(cnx, u, net) {
         // alert('negotiating');
-        if (cnx.signalingState === 'have-remote-offer') return;
-        const offer = await cnx.createOffer();
-        net.ircClient.tagmsg(u.nick, removeNulls({
-            "+draft/command": 'OFFER',
-            '+draft/sdp': offer?.sdp
-        }));
-        await cnx.setLocalDescription(offer);
+        try {
+
+            kiwi.state.peers[u.id].makingOffer = Date.now();
+
+            await cnx.setLocalDescription();
+            net.ircClient.tagmsg(u.nick, removeNulls({
+                "+draft/conf-cmd": cnx.localDescription.type.toUpperCase(),
+                '+draft/conf-sdp': cnx.localDescription.sdp
+            }));
+        } catch (e) {
+            log.error("negotiation failure:", e);
+        }
+        finally {
+            kiwi.state.peers[u.id].makingOffer = null;
+        }
     }
     /**
      * 
@@ -823,6 +1071,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
     function updateTracks() {
         Object.values(kiwi.state.peers).forEach(p => setTracks(p));
     }
+    const RESTART_STATES = ['failed', 'disconnected', 'closed'];
     /**
      * 
      * @param {import('../../kiwiirc/src/libs/state/UserState').default} u 
@@ -833,6 +1082,16 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
     async function connect(u, buf, net) {
 
         kiwi.state.peers ??= {};
+        const existingPeer = kiwi.state.peers[u.id];
+
+        /**
+         * @type {RTCPeerConnection}
+         */
+        const existingCnx = existingPeer?.connection;
+        if (existingCnx && RESTART_STATES.includes(existingCnx.connectionState)) {
+            existingCnx.close();
+            delete kiwi.state.peers[u.id];
+        }
         kiwi.state.peers[u.id] ??= mkPeer();
         const peer = kiwi.state.peers[u.id];
         if (peer.connection) return peer.connection;
@@ -841,15 +1100,29 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
          * @type {RTCPeerConnection}
          */
         const cnx = peer.connection;
+        const candidateQueue = [];
+        peer.addIceCandidate = candidate => {
+            log.debug("adding candidate", candidate, cnx.remoteDescription);
+            if (!cnx?.remoteDescription?.type) {
+                candidateQueue.push(candidate);
+            } else {
+                return cnx.addIceCandidate(candidate);
+            }
+        }
+        peer.consumeIceCandidates = async () => {
+            while (candidateQueue.length) {
+                await cnx.addIceCandidate(candidateQueue.shift());
+            }
+        }
         cnx.onicecandidate = e => {
             log.debug("Ice candidate...", e);
             net.ircClient.tagmsg(
                 u.nick,
                 removeNulls({
-                    '+draft/command': "ICE_CANDIDATE",
-                    '+draft/candidate': e?.candidate?.candidate,
-                    '+draft/sdpmid': e?.candidate?.sdpMid,
-                    '+draft/sdpmlineindex': e?.candidate?.sdpMLineIndex,
+                    '+draft/conf-cmd': "ICE_CANDIDATE",
+                    '+draft/conf-candidate': e?.candidate?.candidate,
+                    '+draft/conf-sdpmid': e?.candidate?.sdpMid,
+                    '+draft/conf-sdpmlineindex': e?.candidate?.sdpMLineIndex,
                 })
             );
         };
@@ -868,13 +1141,15 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
             updateConference();
 
         });
+        peer.makingOffer = null;
         cnx.addEventListener('negotiationneeded', async e => {
-            await negotiate(cnx, u, net);
+            await negotiate(cnx, u, net)
         })
         cnx.addEventListener('iceconnectionstatechange', async e => {
-
+            let attempt = 0;
             while (cnx.iceConnectionState === 'disconnected') {
-                await new Promise(resolve => setTimeout(resolve, 10000));
+                await new Promise(resolve => setTimeout(resolve, Math.min(++attempt * 50, 10000)));
+                if (RESTART_STATES.includes(cnx.connectionState)) return;
                 if (cnx.remoteDescription.type === 'answer') {
                     await cnx.setLocalDescription();
                     await cnx.setRemoteDescription(cnx.remoteDescription);
@@ -896,7 +1171,9 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
      * 
      * @param {{connection: RTCPeerConnection, tracks: RTCRtpSender[]}} peer
      */
-    function setTracks(peer) {
+    function setTracks(peer, attempt = 0) {
+        if (!peer.connection) return setTimeout(() => setTracks(peer, attempt + 1), 100 * attempt);
+        if (attempt >= 100) return;
         // peer.connection.getSenders().forEach(s => peer.connection.removeTrack(s));
 
         kiwi.state.tracks.forEach(({ track, stream }) => {
@@ -909,11 +1186,11 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         /** @type {MediaTrackConstraints}*/
         kiwi.state.mediaConstraints ??= {
             audio: true,
-            video: {
+            video: kiwi.state.isMobile ? {
                 facingMode:
                     'user'
 
-            }
+            } : true
         };
         // alert(JSON.stringify(kiwi.state.mediaConstraints, null, 4))
         const s = await navigator.mediaDevices.getUserMedia(kiwi.state.mediaConstraints);
@@ -927,9 +1204,40 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         s.label = 'cam';
         return s;
     }
+    function setAudio(param0, enabled) {
+        return conferenceSetting(param0, "+draft/conf-audio", enabled);
+    }
+    function setVideo(param0, enabled) {
+        return conferenceSetting(param0, "+draft/conf-video", enabled);
+    }
+    function conferenceSetting({ net, buf, stream }, tag, enabled) {
+        if (!stream) return;
+        net = (net || kiwi.state.getActiveNetwork());
+        buf = (buf || kiwi.state.getActiveBuffer());
+        if (!net) return;
+        if (!buf) return;
+        net.ircClient.tagmsg(buf.name, {
+            "+draft/conf-cmd": "UPDATE_SETTINGS",
+            [tag]: enabled ? 1 : 0,
+            "+draft/conf-stream": (stream || kiwi.state.localStream).id
+        });
+    }
     function updateConference() {
         kiwi.state.$emit('conference-lite.update');
 
+    }
+    function removePeer(peer) {
+        log.debug("Removing peer:", peer);
+        if (!peer) return;
+        peer.connected = false;
+        if (!peer.connection) return;
+        peer.connection.close()
+        updateConference();
+    }
+    function getPeer(nick) {
+        const user = network.users[nick.toUpperCase()];
+        const peer = kiwi.state?.peers?.[user.id];
+        return peer;
     }
     function mkPeer() {
         return {
@@ -964,71 +1272,114 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         (client, raw, parsed) => {
 
             parsed.use(async (event_name, event, client, next) => {
-                log.debug('got event...?', event)
+                log.debug('got event...?', event);
+                if (event_name === 'quit') {
+                    const peer = getPeer(event.nick);
+                    removePeer(peer);
+                }
+                if (event_name === 'part') {
+                    if (event.target === kiwi.state.meetingChannel) {
+                        const peer = getPeer(event.nick);
+                        removePeer(peer);
+                    }
+                }
+                if (event_name === 'mode') {
+                    const meetingMode = event.modes.find(m => m.mode === '-x');
+                    const peer = getPeer(event.nick);
+                    removePeer(peer);
+                }
                 if (event_name.toUpperCase() === 'TAGMSG') {
-                    const ignore = event.target !== network.nick && event.tags["+draft/command"] !== "REFRESH";
+                    const ignore = event.target !== network.nick && event.tags["+draft/conf-cmd"] !== "UPDATE_SETTINGS";
                     if (ignore) return next();
                     const buf = network.bufferByName(event.nick) || kiwi.state.addBuffer(network.id, event.nick);
                     const user = network.users[event.nick.toUpperCase()];
-                    const type = event.tags["+draft/command"];
+                    const type = event.tags["+draft/conf-cmd"];
                     log.debug("Peer TAGMSG", event_name, type, buf.name, user, event);
                     if (!user) return next();
+                    await connect(user, buf, network);
                     log.debug('processing tagmsg...');
-                    const sdp = event.tags["+draft/sdp"];
+                    const sdp = event.tags["+draft/conf-sdp"];
                     kiwi.state.peers ??= {};
                     kiwi.state.peers[user.id] ??= mkPeer();
                     const peer = kiwi.state.peers[user.id];
                     switch (type) {
-                        case 'REFRESH': {
-                            setTimeout(lodash.throttle(() => updateConference(), 1000), 2000);
+                        case 'UPDATE_SETTINGS': {
+                            const video = event.tags["+draft/conf-video"];
+                            const audio = event.tags["+draft/conf-audio"];
+                            const streamId = event.tags["+draft/conf-stream"];
+                            const stream = streamId && peer?.streams?.find?.(s => s.id === streamId);
+                            if (!stream) return;
+                            const videoEnabled = video == 1;
+                            const audioEnabled = audio == 1;
+                            if (video !== undefined && peer.streams?.length) {
+                                stream.videoEnabled = videoEnabled;
+                            }
+                            if (audio !== undefined) {
+                                stream.audioEnabled = audioEnabled;
+                            }
+
+                            updateConference()
+                            setTimeout(lodash.throttle(() => updateConference(), 1000), 5000);
                             return;
                         }
+                        // case 'PRANSWER':s
+                        //     // alert('answering');
+                        //     const cnx = peer.connection;
+                        //     log.debug("cnx", cnx);
+                        //     if (cnx) {
+                        //         await cnx.setRemoteDescription({
+                        //             type: 'answer',
+                        //             sdp
+                        //         });
+                        //         log.debug('remote desc set', sdp);
+                        //         peer.connected = true;
+                        //     }
+                        //     else {
+                        //         log.error("Received an answer for non existent call:", { event, user, peers: kiwi.state.peers })
+                        //     }
+                        //     break;
+                        // }
+                        case 'ANSWER':
                         case 'OFFER': {
-
-                            peer.answer = async function () {
-                                log.debug("answering");
+                            if (!kiwi.state.callState) return;
+                            peer.negotiate = async function () {
+                                log.debug("negotiating");
                                 const cnx = await connect(user, buf, network);
-                                await cnx.setRemoteDescription({ type: 'offer', sdp });
-                                const answer = await cnx.createAnswer();
+                                await cnx.setRemoteDescription({ type: type.toLowerCase(), sdp });
+                                await peer.consumeIceCandidates();
+
+                                if (type !== 'OFFER') {
+                                    peer.connected = true;
+                                    return next();
+                                }
+                                await cnx.setLocalDescription();
+
                                 network.ircClient.tagmsg(event.nick, removeNulls({
-                                    "+draft/command": "ANSWER",
-                                    '+draft/sdp': answer.sdp
+                                    "+draft/conf-cmd": cnx.localDescription.type.toUpperCase(),
+                                    '+draft/conf-sdp': cnx.localDescription.sdp
                                 }));
-                                await cnx.setLocalDescription(answer);
                                 peer.connected = true;
 
                             }
-                            log.debug("got an offer? answering?");
-                            await peer.answer();
+                            const received = new Date(event.tags.time).getTime();
+                            const ignoreOffer = peer.makingOffer || peer?.connection?.signalingState !== 'stable';
+                            const impolite = peer.makingOffer && received < peer.makingOffer;
+                            if (impolite && ignoreOffer) return;
+                            await peer.negotiate();
                             break;
                         }
-                        case 'ANSWER': {
-                            // alert('answering');
-                            const cnx = peer.connection;
-                            log.debug("cnx", cnx);
-                            if (cnx) {
-                                await cnx.setRemoteDescription({
-                                    type: 'answer',
-                                    sdp
-                                });
-                                log.debug('remote desc set', sdp);
-                                peer.connected = true;
-                            }
-                            else {
-                                log.error("Received an answer for non existent call:", { event, user, peers: kiwi.state.peers })
-                            }
-                            break;
-                        }
+
                         case 'ICE_CANDIDATE': {
                             const cnx = peer.connection;
                             if (cnx) {
                                 const candidate = {
-                                    candidate: event.tags['+draft/candidate'],
-                                    sdpMid: event.tags['+draft/sdpmid'],
-                                    sdpMLineIndex: event.tags['+draft/sdpmlineindex'],
+                                    candidate: event.tags['+draft/conf-candidate'],
+                                    sdpMid: event.tags['+draft/conf-sdpmid'],
+                                    sdpMLineIndex: event.tags['+draft/conf-sdpmlineindex'],
                                 }
                                 log.debug("Adding ice candidate", candidate);
-                                await cnx.addIceCandidate(candidate.candidate ? candidate : null);
+
+                                await peer.addIceCandidate(candidate.candidate ? candidate : null);
                             }
                             break;
                         }
