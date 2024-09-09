@@ -245,7 +245,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         emits: ['togglePin',],
         components: { UserAvatar, AudioVisualization: audioVisualization },
         template: `
-            <div class="peer">
+            <div class="peer" :data-user-id="feed.id" :data-stream-id="feed.stream.id">
                 <div class="video-controls" :key="state">
                     <control-btn @click="toggleVideo" 
                         :title="videoEnabled ? 'Turn Off Camera' : 'Turn On Camera'" 
@@ -324,11 +324,12 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
              * @type {MediaStream}
              */
             const stream = this.feed.stream
-            stream.getTracks()
-                .forEach(t => {
-                    t.onmute = e => setVideo({ stream, buf: this.buffer, net: this.network }, false);
-                    t.onunmute = e => setVideo({ stream, buf: this.buffer, net: this.network }, true);
-                });
+            // stream.getTracks()
+            //     .forEach(t => {
+            //         t.onmute = e => (t.kind === 'video' ? setVideo : setAudio)({ stream, target: this.buffer, net: this.network }, false);
+            //         t.onunmute = e => (t.kind === 'video' ? setVideo : setAudio)({ stream, target: this.buffer, net: this.network }, true);
+            //     });
+
             if (!this.isMe) {
                 this.$state.peers[this.user.id].refresh ??= []
                 this.$state.peers[this.user.id].refresh.push(() => this.$nextTick(this.update.bind(this)));
@@ -348,7 +349,9 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
             this.teardown();
         },
         computed: {
-
+            networkStream() {
+                return this.feed.stream.network_label && this.$state.outputFeeds[this.feed.stream.network_label];
+            },
             user() {
                 this.state;
                 return this.feed.id !== undefined && Object.values(this.network.users).find(u => u.id == this.feed.id);
@@ -503,10 +506,11 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                         prev = timestamp;
                     }
                     if (!elapsed || elapsed < (1000 / this.settings.frameRate)) return;
-                    log.debug("elapsed:", elapsed);
+                    // log.debug("elapsed:", elapsed);
                     prev = timestamp;
                     const W = cam.videoWidth;
                     const H = cam.videoHeight;
+                    if (!this.videoEnabled) return ctx.clearRect(0, 0, W, H);
                     const rect = cam.getBoundingClientRect();
                     if (rect) {
                         if (rect.height) canvas.height = rect.height;
@@ -556,7 +560,6 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     // }
                 }
                 draw();
-                this.$nextTick(this.resizeScreen);
                 if (!this.isMe) return;
                 this.videoOutput = canvas.captureStream(this.settings.frameRate);
                 this.setupTracks();
@@ -566,9 +569,8 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
 
             },
             setupTracks() {
-                this.$state.tracks ??= [];
-                this.$state.outputFeed ??= {}
-                this.feed.stream.label && this.removeTracks(this.feed.stream.label);
+                this.$state.outputFeeds ??= {}
+                this.removeTracks();
                 /**
                  * @type {MediaStream}
                  */
@@ -576,20 +578,21 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 // replace video track with video output
                 this.feed.stream.getAudioTracks().forEach(t => stream.addTrack(t));
                 this.videoOutput.getVideoTracks().forEach(t => stream.addTrack(t));
-                const tracks = this.$state.tracks || [];
-                tracks.push(...stream.getTracks().map(t => ({ stream, track: t, })));
-                updateTracks();
+                // const tracks = this.$state.tracks || [];
+                // tracks.push(...stream.getTracks().map(t => ({ stream, track: t, })));
                 // replace output feed
                 // const idx = this.$state.localStreams.indexOf(this.outputFeed);
                 // if (idx !== -1) this.$state.localStreams[idx] = stream;
                 // else this.$state.localStreams.push(stream);
-                if (this.feed.stream.label) this.$state.outputFeed[this.feed.stream.label] = stream;
+                const label = this.feed.stream.network_label;
+                if (this.isMe && label) this.$state.outputFeeds[label] = stream;
+                updateTracks();
                 this.$state.beginLocalStream();
             },
-            removeTracks(label) {
-                const tracksToRemove = this.$state.tracks.filter(({ stream, track }) => stream === this.$state.outputFeed[label]);
-                tracksToRemove.forEach((i) => this.$state.tracks.splice(this.$state.tracks.indexOf(i), 1));
-                removeTracks(tracksToRemove);
+            removeTracks() {
+                if (!this.feed.stream.network_label) return;
+                const streamTracks = getStreamTracks(this.$state.outputFeeds[this.feed.stream.network_label]);
+                removeStreamTracks(streamTracks);
             },
             teardown() {
                 cancelAnimationFrame(this.frame);
@@ -657,12 +660,13 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
             },
             toggleVideo() {
                 const enabled = !this.videoEnabled;
-                this?.feed.stream
+                this.feed.stream
                     ?.getVideoTracks?.()
                     ?.filter(Boolean)?.forEach?.(v => { v.enabled = enabled && !v.enabled });
+
                 if (this.isMe) {
 
-                    setVideo({ net: this.network, buf: this.buffer, stream: this.$state?.outputFeed?.[this.feed.stream.label] }, enabled);
+                    this.networkStream && setVideo({ net: this.network, target: this.buffer, stream: this.networkStream }, enabled);
                     this.videoEnabled = enabled;
                 }
                 this.update();
@@ -670,45 +674,18 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
             toggleAudio() {
                 const enabled = !this.audioEnabled;
 
-                this?.feed?.stream
+                this.feed.stream
                     ?.getAudioTracks?.()
                     ?.filter(Boolean)?.forEach?.(v => { v.enabled = enabled && !v.enabled });
+
                 if (this.isMe) {
 
-                    setAudio({ net: this.network, buf: this.buffer, stream: this.$state?.outputFeed?.[this.feed.stream.label] }, enabled);
+                    this.networkStream && setAudio({ net: this.network, target: this.buffer, stream: this.networkStream }, enabled);
                     this.audioEnabled = enabled;
                 }
                 this.update();
             },
-            resizeScreen() {
-                if (true || !this.videoEnabled) return;
-                /**
-             * @type {HTMLVideoElement}
-             */
-                const vid = this.$refs?.cam;
-                if (!vid) return;
-                const viewer = document.querySelector(
-                    '.kiwi-mediaviewer.kiwi-main-mediaviewer .kiwi-mediaviewer-content'
-                );
-                const width = viewer.getBoundingClientRect().width * 0.9;
-                const screenWidth = window.innerWidth;
-                if (!this.pinned)
-                    vid.width = Math.max(
-                        width /
-                        Math.max(
-                            Math.min(
-                                Object.keys(this.connectedPeers).length + 1, 8),
-                            2),
-                        screenWidth / 4
-                    );
-                else vid.width = screenWidth * 0.9;
-                if (this.$refs.fallback) {
-                    this.$refs.fallback.style.width = Math.max(vid.width, screenWidth / 4) + 'px';
-                    this.$refs.fallback.style.height = Math.max(rect.height, screenWidth / 4) + 'px';
-                }
 
-                this.screen = rect;
-            },
             setWidth(v) {
                 if (!this.$el) return this.$nextTick(() => this.setWidth(v));
                 this.$el.style.width = v;
@@ -827,6 +804,11 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 this.update();
             },
             async screenShare() {
+                const self = this;
+                if (tryHangItUp()) return;
+                /**
+                 * @type {MediaStream}
+                 */
                 let stream;
                 try {
                     stream = await navigator.mediaDevices.getDisplayMedia();
@@ -834,14 +816,46 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     log.error("Failed to get display stream:", e);
                 }
                 if (stream) {
-                    stream.label = "screenshare";
+                    stream.network_label = "screenshare";
                     this.$state.localStreams.push(stream);
                 }
-                updateTracks();
+                const tracks = stream.getTracks();
+                tracks.forEach(t => {
+                    t.onended = e => {
+                        tryHangItUp();
+                    }
+                });
+
+                function tryHangItUp() {
+                    const existingScreenShareIdx = self.$state?.localStreams?.findIndex?.(stream => stream.network_label === "screenshare");
+                    /**
+                     * @type {MediaStream}
+                     */
+                    const existingScreenShare = existingScreenShareIdx !== -1 && self.$state.localStreams[existingScreenShareIdx]
+                    if (existingScreenShareIdx !== -1) {
+                        self.$state.localStreams.splice(existingScreenShareIdx, 1);
+                        if (!existingScreenShare) return false;
+                        existingScreenShare.getTracks().forEach(t => { t.enabled = false; t.stop(); });
+                        const networkStream = self.$state.outputFeeds.screenshare;
+                        if (networkStream) {
+                            networkStream.getTracks().forEach(t => { t.enabled = false; t.stop(); })
+                            removeRemoteStream({
+                                net: this.network,
+                                target: this.buffer,
+                                stream: networkStream
+                            });
+                        }
+                        delete self.$state.outputFeeds.screenshare;
+                        self.update();
+                        return true;
+                    }
+                }
+                // updateTracks();
                 this.update();
             },
             async leaveCall() {
-                typeof this.$state.outputFeed === 'object' && Object.values(this.$state.outputFeed).forEach(s => {
+                this.$state.tracks = [];
+                typeof this.$state.outputFeeds === 'object' && Object.values(this.$state.outputFeeds).forEach(s => {
                     s.getTracks().forEach(t => t.stop() && s.removeTrack(t));
                 });
                 [this.$state.localStream, ...(this.$state.localStreams || [])].filter(Boolean).forEach(
@@ -853,6 +867,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                         s.getTracks().forEach(t => t.stop() && s.removeTrack(t));
                     });
                 delete this.$state.localStream;
+                this.$state.localStreams = [];
                 /**
            * @type {import('../../kiwiirc/src/libs/state/BufferState').default}
            */
@@ -861,6 +876,8 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                  * @type {import('../../kiwiirc/src/libs/state/NetworkState').default}
                  */
                 const net = this.network;
+
+                delete this.$state.localStreamReady;
                 this.$state.emit('mediaviewer.hide');
                 net.ircClient.mode(buf.name, '-x', net.nick);
                 Object.entries(this.$state.peers).forEach(([id, peer]) => {
@@ -870,6 +887,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     const cnx = peer.connection;
                     cnx && cnx.close();
                 });
+                this.$state.outputFeeds = {};
                 this.$state.peers = {};
                 this.$state.callState = null;
                 if (this.$state.recognition) {
@@ -1008,7 +1026,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 net.ircClient.mode(buf.name, '+x', net.nick);
                 document.addEventListener("visibilitychange", function () {
 
-                    setVideo({ net, buf, stream: this.$state.localStream }, document.visibilityState === 'visible');
+                    setVideo({ net, target: buf, stream: this.$state.localStream }, document.visibilityState === 'visible');
                 }, false);
                 await Promise.all(Object.values(buf.users).map(
                     /**
@@ -1075,7 +1093,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
      * 
      * @param {MediaStreamTrack[]} tracksToRemove 
      */
-    function removeTracks(tracksToRemove) {
+    function removeStreamTracks(tracksToRemove) {
         const peers = Object.values(kiwi.state.peers).filter(p => p.connection);
         tracksToRemove.forEach((t) => peers.forEach(peer => {
             const { track, stream } = t;
@@ -1103,10 +1121,9 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
      * 
      */
     async function connect(u, buf, net) {
-
+        if (u.id === kiwi.state.getActiveNetwork().currentUser().id) return;
         kiwi.state.peers ??= {};
         const existingPeer = kiwi.state.peers[u.id];
-
         /**
          * @type {RTCPeerConnection}
          */
@@ -1115,7 +1132,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
             existingCnx.close();
             delete kiwi.state.peers[u.id];
         }
-        kiwi.state.peers[u.id] ??= mkPeer();
+        kiwi.state.peers[u.id] ??= mkPeer(u.id);
         const peer = kiwi.state.peers[u.id];
         if (peer.connection) return peer.connection;
         peer.connection = new RTCPeerConnection();
@@ -1151,8 +1168,15 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         };
         cnx.ontrack = e => {
             log.debug("got a track", e);
+
+            peer.streamSettings && e.streams.forEach(stream => {
+                const existingSettings = peer.streamSettings[stream.id];
+                if (existingSettings) {
+                    Object.assign(stream, existingSettings);
+                }
+            });
             peer.streams ??= [];
-            peer.streams.push(...e.streams.filter(s => !peer.streams.find(s2 => s2.id === s.id)));
+            peer.streams = peer.streams.concat(e.streams.filter(s => !peer.streams.find(s2 => s2.id === s.id))).filter(s => s.active);
             updateConference();
             peer?.ontrack?.(e);
         }
@@ -1190,6 +1214,10 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         setTracks(peer);
         return cnx;
     }
+    function getStreamTracks(streams) {
+        streams = streams instanceof Array ? streams : [streams]
+        return streams.filter(Boolean).flatMap(stream => stream.getTracks().map(track => ({ stream, track })))
+    }
     /**
      * 
      * @param {{connection: RTCPeerConnection, tracks: RTCRtpSender[]}} peer
@@ -1198,8 +1226,8 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         if (!peer.connection) return setTimeout(() => setTracks(peer, attempt + 1), 100 * attempt);
         if (attempt >= 100) return;
         // peer.connection.getSenders().forEach(s => peer.connection.removeTrack(s));
-
-        kiwi.state.tracks.forEach(({ track, stream }) => {
+        const tracks = getStreamTracks(Object.values(kiwi.state.outputFeeds));
+        tracks.forEach(({ track, stream }) => {
             log.debug("adding track", track);
             if (!peer.connection.getSenders().find(s => s.track && s.track.id === track.id)) peer.connection.addTrack(track, stream);
         });
@@ -1224,24 +1252,49 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 await new Promise((resolve) => setTimeout(resolve, 100));
             }
         };
-        s.label = 'cam';
+        s.network_label = 'cam';
         return s;
     }
+    /**
+     * 
+     * @param {{ net: import('../../kiwiirc/src/libs/state/NetworkState').default, target: object, stream: MediaStream }} param0 
+     * @param {*} enabled 
+     * @returns 
+     */
     function setAudio(param0, enabled) {
         return conferenceSetting(param0, "+draft/conf-audio", enabled);
     }
+    /**
+     * 
+     * @param {{ net: import('../../kiwiirc/src/libs/state/NetworkState').default, target: object, stream: MediaStream }} param0 
+     * @param {*} enabled 
+     * @returns 
+     */
     function setVideo(param0, enabled) {
         return conferenceSetting(param0, "+draft/conf-video", enabled);
     }
-    function conferenceSetting({ net, buf, stream }, tag, enabled) {
+    /**
+     * 
+     * @param {{ net: import('../../kiwiirc/src/libs/state/NetworkState').default, target: object, stream: MediaStream }} param0 
+     * @param {*} enabled 
+     * @returns 
+     */
+    function removeRemoteStream(param0, enabled) {
+        return conferenceSetting(param0, "+draft/conf-rmstream", 1);
+    }
+    function conferenceSetting({ net, target, stream }, tag, enabled) {
         if (!stream) return;
+        const v = enabled ? 1 : 0;
         net = (net || kiwi.state.getActiveNetwork());
-        buf = (buf || kiwi.state.getActiveBuffer());
+        target = (target || kiwi.state.getActiveBuffer());
+        kiwi.state.conferenceSettings ??= {};
+        kiwi.state.conferenceSettings[stream.id] ??= {}
+        kiwi.state.conferenceSettings[stream.id][tag] = v;
         if (!net) return;
-        if (!buf) return;
-        net.ircClient.tagmsg(buf.name, {
-            "+draft/conf-cmd": "UPDATE_SETTINGS",
-            [tag]: enabled ? 1 : 0,
+        if (!target) return;
+        net.ircClient.tagmsg(target.nick || target.name, {
+            "+draft/conf-cmd": "SETTINGS",
+            [tag]: v,
             "+draft/conf-stream": (stream || kiwi.state.localStream).id
         });
     }
@@ -1252,19 +1305,26 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
     function removePeer(peer) {
         log.debug("Removing peer:", peer);
         if (!peer) return;
+        delete kiwi.state.peers[peer.id];
         peer.connected = false;
         if (!peer.connection) return;
+        peer.streams = [];
         peer.connection.getSenders().forEach(t => peer.connection.removeTrack(t));
         peer.connection.close()
+        delete peer.connection;
+        delete peer.streams;
         updateConference();
+        log.debug("peer removed");
     }
     function getPeer(nick) {
         const user = network.users[nick.toUpperCase()];
         const peer = kiwi.state?.peers?.[user.id];
         return peer;
     }
-    function mkPeer() {
+    function mkPeer(id) {
         return {
+            id,
+            new: true,
             _connected: false,
             get connected() {
                 return this._connected;
@@ -1277,14 +1337,15 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
             }
         }
     }
+    /**
+         * 
+         * @type { import('../../kiwiirc/src/libs/state/NetworkState').default}
+         */
     let network = kiwi.state.getActiveNetwork();
     !network && await new Promise((resolve, reject) => kiwi.on('start', async () => {
         resolve();
     }))
-    /**
-        * 
-        * @type { import('../../kiwiirc/src/libs/state/NetworkState').default}
-        */
+
     if (!network) network = kiwi.state.getActiveNetwork();
     network.ircClient.use(
         /**
@@ -1294,7 +1355,8 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
             * @param {import('middleware-handler')} parsed 
             */
         (client, raw, parsed) => {
-
+            const historical = event?.batch?.type === 'chathistory';
+            if (historical) return next();
             parsed.use(async (event_name, event, client, next) => {
                 log.debug('got event...?', event);
                 if (event_name === 'quit') {
@@ -1313,7 +1375,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     removePeer(peer);
                 }
                 if (event_name.toUpperCase() === 'TAGMSG') {
-                    const ignore = event.target !== network.nick && event.tags["+draft/conf-cmd"] !== "UPDATE_SETTINGS";
+                    const ignore = event.target !== network.nick && event.tags["+draft/conf-cmd"] !== "SETTINGS";
                     if (ignore) return next();
                     const buf = network.bufferByName(event.nick) || kiwi.state.addBuffer(network.id, event.nick);
                     const user = network.users[event.nick.toUpperCase()];
@@ -1324,22 +1386,60 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     log.debug('processing tagmsg...');
                     const sdp = event.tags["+draft/conf-sdp"];
                     kiwi.state.peers ??= {};
-                    kiwi.state.peers[user.id] ??= mkPeer();
+                    kiwi.state.peers[user.id] ??= mkPeer(user.id);
                     const peer = kiwi.state.peers[user.id];
+                    if (peer.new) {
+                        peer.new = false;
+                        kiwi.state.conferenceSettings && Object.entries(kiwi.state.conferenceSettings).forEach(([streamId, settings]) => {
+                            network.ircClient.tagmsg(event.nick, {
+                                '+draft/conf-cmd': 'SETTINGS',
+                                '+draft/conf-stream': streamId,
+                                ...settings
+                            });
+                        });
+                    }
                     switch (type) {
-                        case 'UPDATE_SETTINGS': {
+                        case 'SETTINGS': {
+                            if (event.nick === kiwi.state.getActiveNetwork().nick) return next();
+                            // return next();\
+                            /**
+                             * @type {RTCPeerConnection}
+                             */
+                            const cnx = peer.connection;
                             const video = event.tags["+draft/conf-video"];
                             const audio = event.tags["+draft/conf-audio"];
                             const streamId = event.tags["+draft/conf-stream"];
-                            const stream = streamId && peer?.streams?.find?.(s => s.id === streamId);
-                            if (!stream) return;
+                            const rm = event.tags["+draft/conf-rmstream"];
+                            const streamIdx = streamId && peer?.streams?.findIndex?.(s => s.id === streamId);
+                            /**
+                             * @type {MediaStream}
+                             */
+                            const stream = streamIdx && peer.streams[streamIdx]
+                            const removeStream = rm == 1;
+                            if (stream && removeStream) {
+                                peer.streams.splice(streamIdx, 1);
+                                const ids = [];
+                                stream.getTracks()
+                                    .forEach(t => t.stop() && ids.push(t.id))
+                                const toRemove = cnx.getSenders().filter(s => s.track && ids.includes(s.track.id));
+                                toRemove.forEach(sender => {
+                                    cnx.removeTrack(sender);
+                                });
+                                updateConference();
+                                return next();
+                            }
                             const videoEnabled = video == 1;
                             const audioEnabled = audio == 1;
-                            if (video !== undefined && peer.streams?.length) {
-                                stream.videoEnabled = videoEnabled;
+                            peer.streamSettings ??= {};
+                            peer.streamSettings[streamId] ??= {};
+                            log.debug("video settings:", { tags: event.tags, stream, streamId, peer: { ...peer } })
+                            if (video !== undefined) {
+                                peer.streamSettings[streamId].videoEnabled = videoEnabled
+                                if (stream) stream.videoEnabled = videoEnabled;
                             }
                             if (audio !== undefined) {
-                                stream.audioEnabled = audioEnabled;
+                                peer.streamSettings[streamId].audioEnabled = audioEnabled
+                                if (stream) stream.audioEnabled = audioEnabled;
                             }
 
                             updateConference()
@@ -1388,7 +1488,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                             const received = new Date(event.tags.time).getTime();
                             const ignoreOffer = peer.makingOffer || peer?.connection?.signalingState !== 'stable';
                             const impolite = peer.makingOffer && received < peer.makingOffer;
-                            if (impolite && ignoreOffer) return;
+                            if (impolite && ignoreOffer) return next();
                             await peer.negotiate();
                             break;
                         }
