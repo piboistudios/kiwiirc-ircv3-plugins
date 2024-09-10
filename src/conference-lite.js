@@ -312,7 +312,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                         <h1 class="u-link">Video element not supported in this browser</h1>
                     </video>
                     <div
-                        class="live-vid fallback"
+                        class="fallback"
                         v-show="!videoEnabled"
                         ref="fallback"
                     >
@@ -333,7 +333,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                         </div>
                     </div>
                     <canvas
-                        v-show="videoEnabled"
+                        :class="{visible: videoEnabled}"
                         ref="vid"
                         class="live-vid"
                         :data-user-id="feed.id"
@@ -428,7 +428,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 } else {
                     this.settings.videoSize = { ...this.defaults.videoSize };
                 }
-
+                this.resetCamDimensions();
             }
         },
         methods: {
@@ -549,7 +549,6 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 const cam = this.$refs.cam;
                 const container = this.$refs.container;
                 const ctx = canvas.getContext('2d');
-                this.screen = cam.getBoundingClientRect();
                 const isMe = this.isMe;
                 let volume = 0;
                 this.hasCamDimensions = false;
@@ -608,18 +607,21 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                         });
 
                     }
-                    if (!this.videoEnabled) return ctx.clearRect(0, 0, W, H);
                     const rect = cam.getBoundingClientRect();
                     if (rect) {
                         if (rect.height) canvas.height = rect.height;
                         if (rect.width) canvas.width = rect.width;
                         // canvas.style.width = `${this.settings.videoSize.width}`;
-                        canvas.style.height = `${this.settings.videoSize.height}`;
+                        this.$refs.fallback.style.width = canvas.style.width = `${this.settings.videoSize.width}`;
                         const canvasBounds = canvas.getBoundingClientRect();
-                        container.style.maxWidth = canvasBounds.width + 'px';
-                        container.style.maxHeight = canvasBounds.height + 'px';
+                        if (canvasBounds.width) this.$refs.fallback.style.width = canvasBounds.width + 'px';
+                        
+                        // const canvasBounds = canvas.getBoundingClientRect();
+                        // container.style.maxWidth = canvasBounds.width + 'px';
+                        // container.style.maxHeight = canvasBounds.height + 'px';
 
                     }
+                    if (!this.videoEnabled) return;
                     if (this.isMyCam) {
 
                         if (cam.videoWidth && cam.videoHeight && canvas.width && canvas.height && this.$state.backgroundFx) {
@@ -792,7 +794,6 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                         width: kiwi.state.isMobile ? '128px' : '256px'
                     }
                 },
-                screen: null,
                 videoOutput: null,
                 outputFeed: null,
                 senders: [],
