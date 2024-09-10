@@ -41,6 +41,12 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
     const {
         faCommentSlash
     } = await import('@fortawesome/free-solid-svg-icons/faCommentSlash')
+    const {
+        faEllipsis
+    } = await import('@fortawesome/free-solid-svg-icons/faEllipsis')
+    const {
+        faEllipsisVertical
+    } = await import('@fortawesome/free-solid-svg-icons/faEllipsisVertical')
     kiwi.svgIcons.library.add(
         faPhone,
         faVideo,
@@ -54,7 +60,9 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         faImage,
         faMessage,
         faComment,
-        faCommentSlash
+        faCommentSlash,
+        faEllipsis,
+        faEllipsisVertical
     );
     kiwi.state.isMobile = (function () {
         let check = false;
@@ -78,7 +86,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         },
         emits: ['click'],
         template: `
-                <span @click="$emit('click')" class="kiwi-header-option">
+                <span @click="e => $emit('click', e)" class="kiwi-header-option control control-btn">
                     <a :title="title" :class="textClass" :style="'color:'+color">
                         <svg-icon :icon="icon" v-bind="iconProps" />
                     </a>
@@ -232,6 +240,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
             update() {
                 this.state = (this.state + 1) % 1024;
                 log.debug("Updating:", this.state);
+                this.onUpdate instanceof Function && this.onUpdate();
             }
         },
         data() {
@@ -246,27 +255,50 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         emits: ['togglePin',],
         components: { UserAvatar, AudioVisualization: audioVisualization },
         template: `
-            <div class="peer" :data-user-id="feed.id" :data-stream-id="feed.stream.id">
-                <div class="video-controls" :key="state">
-                    <control-btn @click="toggleVideo" 
-                        :title="videoEnabled ? 'Turn Off Camera' : 'Turn On Camera'" 
-                        :icon="videoEnabled ? 'video' : 'video-slash'"
-                    />
-                    <control-btn @click="toggleAudio" 
-                        :title="muted ? 'Unmute' : 'Mute'" 
-                        :icon="!muted ? 'microphone' : 'microphone-slash'"
-                    />
-                    <control-btn @click="togglePin"
-                        :title="pinned ? 'Unpin' : 'Pin'"
-                        :icon="pinned ? 'thumbtack' : 'thumbtack-slash'"
-                    />
-                    <control-btn v-if="canFlipCam" 
-                        @click="flipCameraView"
-                        title="Flip Camera"
-                        icon="camera-rotate"
-                    />
-                </div>
-                <div class="vid-container">
+            <div class="peer"  :data-user-id="feed.id" :data-stream-id="feed.stream.id">
+                <div class="vid-container" ref="container">
+                     <div class="video-controls"  :key="state">
+                        <div class="video-info">
+                                <audio-visualization
+                                    ref="audioOutput"
+                                    v-if="audio.analyser"
+                                    :analyser="audio.analyser"
+                                    :bar-width="8"
+                                    :bar-padding="2"
+                                    :amplitude="16"
+                                />
+                        </div>
+                        <div ref="controls" class="control control-container":class="{mobile: $state.isMobile, 'controls-open': forceShowControls}">
+                             <control-btn
+                                v-show="$state.isMobile"
+                                title="Settings" 
+                                icon="ellipsis"
+                                @click="toggleControls"
+                            />
+                            <control-btn @click="toggleVideo" 
+                                v-show="showControls"
+                                :title="videoEnabled ? 'Turn Off Camera' : 'Turn On Camera'" 
+                                :icon="videoEnabled ? 'video' : 'video-slash'"
+                            />
+                            <control-btn @click="toggleAudio" 
+                                v-show="showControls"
+                                :title="muted ? 'Unmute' : 'Mute'" 
+                                :icon="!muted ? 'microphone' : 'microphone-slash'"
+                            />
+                            <control-btn @click="togglePin"
+                                v-show="showControls"
+                                :title="pinned ? 'Unpin' : 'Pin'"
+                                :icon="pinned ? 'thumbtack' : 'thumbtack-slash'"
+                            />
+                            <control-btn v-if="canFlipCam" 
+                                v-show="showControls"
+                                @click="flipCameraView"
+                                title="Flip Camera"
+                                icon="camera-rotate"
+                            />
+                           
+                        </div>
+                    </div>
                     <video 
                         ref="cam"
                         :key="isMe"
@@ -292,7 +324,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                                 <circle r="40" cx="50" cy="50" class="conference-volume-indicator"><!--v-if--></circle>
                             </svg>
                         </div>
-                        <div class="kiwi-userbox-avatar">
+                        <div class="kiwi-userbox-avatar" :class="{mobile: $state.isMobile}">
                             <user-avatar
                                 :network="network"
                                 :user="user"
@@ -307,16 +339,6 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                         :data-user-id="feed.id"
                         :data-nick="user.nick"
                     />
-                        <div class="video-info">
-                            <audio-visualization
-                                ref="audioOutput"
-                                v-if="audio.analyser"
-                                :analyser="audio.analyser"
-                                :bar-width="8"
-                                :bar-padding="2"
-                                :amplitude="16"
-                            />
-                        </div>
                 </div>
             </div>
         `,
@@ -359,6 +381,10 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
             this.teardown();
         },
         computed: {
+            showControls() {
+                return !this.$state.isMobile || this.forceShowControls;
+            },
+
             networkStream() {
                 return this.feed.stream.network_label && this.$state.outputFeeds[this.feed.stream.network_label];
             },
@@ -389,7 +415,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                  * @todo make this actually work :)
                  */
                 // return false;
-                if (!kiwi.state.isMobile || !this.isMe) return false;
+                if (!this.$state.isMobile || !this.isMe) return false;
                 return this?.feed?.stream?.id && this.feed.stream.id === this.feed.streams[0].id;
             }
         },
@@ -402,9 +428,47 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 } else {
                     this.settings.videoSize = { ...this.defaults.videoSize };
                 }
+
             }
         },
         methods: {
+            toggleControls(e) {
+                this.forceShowControls = !this.forceShowControls
+                if (!this.forceShowControls) return;
+                /**
+                 * @type {HTMLDivElement}
+                 */
+                const controls = this.$refs.controls;
+                /**
+                 * 
+                 * @param {MouseEvent} e 
+                 */
+                const listener = e => {
+                    log.debug("got a click", e.relatedTarget, controls, controls.contains(e.target));
+                    if (e.target !== controls) {
+                        this.forceShowControls = false;
+                        document.removeEventListener('click', listener)
+                    }
+                }
+                setTimeout(() => {
+                    document.addEventListener('click', listener);
+                }, 50);
+            },
+            setFallbackSize() {
+                this.$nextTick(() => {
+                    const canvas = this.$refs.vid;
+                    const fallback = this.$refs.fallback;
+                    if (fallback) {
+                        const canvasBounds = canvas.getBoundingClientRect();
+                        if (canvasBounds.height) fallback.style.height = canvasBounds.height + 'px';
+                        if (canvasBounds.width) fallback.style.width = canvasBounds.width + 'px';
+                    }
+                    this.resetCamDimensions();
+                })
+            },
+            onUpdate() {
+                this.resetCamDimensions();
+            },
             async setupTranscription() {
                 /**
                        * @type {import('../../kiwiirc/src/libs/state/BufferState').default}
@@ -467,6 +531,13 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 }
 
             },
+            resetCamDimensions(attempt = 0) {
+                if (attempt > 32) return;
+                const cam = this.$refs.cam;
+                if (!cam) return setTimeout(() => this.resetCamDimensions(attempt + 1), 100 * attempt);
+                cam.style.height = cam.style.width = 'auto';
+                this.hasCamDimensions = false;
+            },
             setup() {
                 /**
                  * @type {HTMLCanvasElement}
@@ -476,10 +547,12 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                  * @type {HTMLVideoElement}
                  */
                 const cam = this.$refs.cam;
+                const container = this.$refs.container;
                 const ctx = canvas.getContext('2d');
                 this.screen = cam.getBoundingClientRect();
                 const isMe = this.isMe;
                 let volume = 0;
+                this.hasCamDimensions = false;
                 const prev = {};
                 const draw = async (timestamp) => {
                     if (!this.feed || !this.$refs.cam) return;
@@ -526,6 +599,15 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     // log.debug("elapsed:", elapsed);
                     const W = cam.videoWidth;
                     const H = cam.videoHeight;
+                    if (!this.hasCamDimensions && W && W) {
+                        this.setFallbackSize();
+                        this.hasCamDimensions = true;
+                        this.$nextTick(() => {
+
+                            cam.style.height = cam.style.width = '0';
+                        });
+
+                    }
                     if (!this.videoEnabled) return ctx.clearRect(0, 0, W, H);
                     const rect = cam.getBoundingClientRect();
                     if (rect) {
@@ -533,12 +615,14 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                         if (rect.width) canvas.width = rect.width;
                         // canvas.style.width = `${this.settings.videoSize.width}`;
                         canvas.style.height = `${this.settings.videoSize.height}`;
-                        const fallback = this.$refs.fallback;
-                        if (fallback) fallback.style.height = canvas.style.height;
+                        const canvasBounds = canvas.getBoundingClientRect();
+                        container.style.maxWidth = canvasBounds.width + 'px';
+                        container.style.maxHeight = canvasBounds.height + 'px';
+
                     }
                     if (this.isMyCam) {
 
-                        if (cam.videoWidth && cam.videoHeight && canvas.width && rect.width && rect.height && canvas.height && this.$state.backgroundFx) {
+                        if (cam.videoWidth && cam.videoHeight && canvas.width && canvas.height && this.$state.backgroundFx) {
                             /**
                              * @type {import('@tensorflow-models/body-segmentation').BodySegmenter}
                             */
@@ -672,16 +756,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 if (!this.$el) return this.$nextTick(() => this.setMaxHeight(v));
                 this.$el.style.maxHeight = v;
             },
-            syncDimensions() {
-                if (!this.$refs.vid) return this.$nextTick(() => this.syncHeight(fallback));
-                /**
-                 * @type {HTMLVideoElement}
-                 */
-                const vid = this.$refs?.vid;
-                const rect = vid.getBoundingClientRect();
-                this.setHeight(rect.height + 'px')
-                this.setWidth(rect.width + 'px')
-            },
+
             /**
              * 
              * @param {MediaStream} stream 
@@ -700,19 +775,21 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         },
         data() {
             return {
+                forceShowControls: false,
                 flippingCam: false,
+                hasCamDimensions: false,
                 settings: {
                     frameRate: 30,
                     volumeUpdateRate: 30,
                     videoSize: {
-                        height: '256px',
-                        width: '256px'
+                        height: kiwi.state.isMobile ? '128px' : '256px',
+                        width: kiwi.state.isMobile ? '128px' : '256px'
                     }
                 },
                 defaults: {
                     videoSize: {
-                        height: '256px',
-                        width: '256px'
+                        height: kiwi.state.isMobile ? '128px' : '256px',
+                        width: kiwi.state.isMobile ? '128px' : '256px'
                     }
                 },
                 screen: null,
@@ -1147,7 +1224,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 }
             });
             peer.streams ??= [];
-            peer.streams = peer.streams.concat(e.streams.filter(s => !peer.streams.find(s2 => s2.id === s.id))).filter(s => s.active);
+            peer.streams = peer.streams.concat(e.streams.filter(s => !peer.streams.find(s2 => s2.id === s.id))).filter(s => s.active).slice(0, 2);
             updateConference();
             peer?.ontrack?.(e);
         }
@@ -1347,9 +1424,14 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     log.debug("got mode", event.modes);
                     if (leaveMeetingMode) {
 
-                        const peer = getPeer(event.nick);
+                        const peer = getPeer(leaveMeetingMode.param);
                         removePeer(peer);
                     }
+                    const buf = network.bufferByName(event.target);
+                    return kiwi.state.addMessage(buf, {
+                        leftMeeting: true,
+                        ...event
+                    })
                 }
                 if (event_name.toUpperCase() === 'TAGMSG') {
                     const ignore = event.target !== network.nick && event.tags["+draft/conf-cmd"] !== "SETTINGS";
@@ -1422,7 +1504,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                             updateConference()
                             return;
                         }
-                      
+
                         case 'ANSWER':
                         case 'OFFER': {
                             if (!kiwi.state.callState) return;
