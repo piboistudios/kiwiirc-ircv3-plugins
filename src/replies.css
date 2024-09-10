@@ -83,7 +83,7 @@
 
 .peer {
     margin-bottom: 8px;
-    background: var(--comp-usermenu-open-bg);
+    /* background: var(--comp-usermenu-open-bg); */
     position: relative;
     display: flex;
     height: auto;

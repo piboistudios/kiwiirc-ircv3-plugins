@@ -1428,10 +1428,10 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                         removePeer(peer);
                     }
                     const buf = network.bufferByName(event.target);
-                    return kiwi.state.addMessage(buf, {
-                        leftMeeting: true,
-                        ...event
-                    })
+                    // return kiwi.state.addMessage(buf, {
+                    //     leftMeeting: true,
+                    //     ...event
+                    // })
                 }
                 if (event_name.toUpperCase() === 'TAGMSG') {
                     const ignore = event.target !== network.nick && event.tags["+draft/conf-cmd"] !== "SETTINGS";
