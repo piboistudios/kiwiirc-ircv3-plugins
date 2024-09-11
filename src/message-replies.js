@@ -15,7 +15,7 @@ require('emoji-mart-vue-fast/css/emoji-mart.css');
 const REACT_INTERNALS = Symbol('react');
 kiwi.plugin('message-replies', async function (kiwi, log) {
     const {
-         faReply
+        faReply
     } = await import('@fortawesome/free-solid-svg-icons/faReply')
     kiwi.svgIcons.library.add(faReply)
 
@@ -34,32 +34,47 @@ kiwi.plugin('message-replies', async function (kiwi, log) {
             setEmojiMartClasses();
         }, 1)
     }
+     /** sometimes you just gotta hack shit together....
+         * this is bc absolute positioned elements get cut off by overflow: hidden, but
+         *  fixed elements are, well, fixed... this will make a fixed element, e.g.
+         *  the emoji mart behave like a relative one
+         * 
+         * console learnings:
+         * bottom to top of btn
+         * mart.style.top = ((mart.parentElement.getBoundingClientRect().top - mart.getBoundingClientRect().height) + 16)+ 'px';
+         *     window.bottomFn = spam((mart) => {mart.style.top = ((mart.parentElement.getBoundingClientRect().bottom + mart.parentElement.getBoundingClientRect()))+ 'px';});
+    window.topFn = spam((mart) => {mart.style.top = (((mart.parentElement.getBoundingClientRect().top)) - mart.getBoundingClientRect().height+24) + 'px';console.log({mart: mart.getBoundingClientRect(), parent: mart.parentElement.getBoundingClientRect(), container: container.getBoundingClientRect() }) })
+
+         */
+        /**
+         * top to bottom of btn
+         * temp5.style.top = ((temp6.getBoundingClientRect().top) + temp6.getBoundingClientRect().height*2)+ 'px';
+         */
+    const spamIt = fn => (...args) => { const interval = setInterval(() => fn(...args), 50); setTimeout(() => clearInterval(interval), 1000) }
     function setEmojiMartClasses() {
+        const container = document.querySelector('.kiwi-container-content').getBoundingClientRect();
+
         const marts = document.querySelectorAll('.kiwi-emoji-mart.active');
-        marts.forEach(mart => {
+       
+        marts.forEach(spamIt(mart => {
             const rect = mart.getBoundingClientRect();
-            if (rect.right >= window.innerWidth) {
-                log.debug('setting right');
-                mart.classList.remove('right');
-                mart.classList.add('left');
-            } /* else {
-                mart.classList.remove('left');
-                mart.classList.add('right');
-                log.debug('setting left');
-            } */
-            if (rect.bottom > window.innerHeight) {
+            const parent = mart.parentElement.getBoundingClientRect();
+          
+            if ((parent.bottom) > (container.bottom - container.height / 2)) {
                 mart.classList.add('top');
                 mart.classList.remove('bottom');
                 log.debug('setting top');
+                mart.style.top = (parent.top - mart.getBoundingClientRect().height + 24) + 'px'
 
-            } else if (rect.top < 0) {
+            } else /* if (parent.top < container.top) */ {
                 mart.classList.add('bottom');
                 mart.classList.remove('top');
                 log.debug('setting bottom');
+                mart.style.top = ((parent.bottom + parent.height)) + 'px';
 
             }
 
-        });
+        }));
     }
     const { titleCase } = await import('title-case');
     const { EmojiIndex } = await import('emoji-mart-vue-fast/src/utils/emoji-data');
@@ -618,8 +633,8 @@ kiwi.plugin('message-replies', async function (kiwi, log) {
                                     if (!buf) return;
                                     if (!buf.state.reactions) return;
                                     const react = buf.state.reaction_msgs[msgid];
-                                    
-                                    const { emoji, entry: {nick}, msgid: refid } = react;
+
+                                    const { emoji, entry: { nick }, msgid: refid } = react;
                                     unsetReactionUi({ buf, msgid: refid, emoji, nick });
                                 }
                             }

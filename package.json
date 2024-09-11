@@ -30,6 +30,7 @@
     "escape-regex": "^1.0.7",
     "irc-framework": "^4.13.1",
     "lodash": "^4.17.21",
+    "panzoom": "^9.4.3",
     "saslmechanisms": "^0.1.1",
     "stream-browserify": "^3.0.0",
     "style-loader": "^4.0.0",

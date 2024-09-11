@@ -1,6 +1,11 @@
 const IrcMessage = require('irc-framework/src/ircmessage');
+/**
+ * @type {import('panzoom').default}
+ */
+const Panzoom = require('panzoom');
 const lodash = require('lodash');
 const bodySegmentation = require('@tensorflow-models/body-segmentation')
+const BREAKPOINT = 720;
 kiwi.plugin('conference-lite', async function (kiwi, log) {
     const {
         faPhone,
@@ -47,6 +52,9 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
     const {
         faEllipsisVertical
     } = await import('@fortawesome/free-solid-svg-icons/faEllipsisVertical')
+    const {
+        faMagnifyingGlass
+    } = await import('@fortawesome/free-solid-svg-icons/faMagnifyingGlass')
     kiwi.svgIcons.library.add(
         faPhone,
         faVideo,
@@ -62,7 +70,8 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         faComment,
         faCommentSlash,
         faEllipsis,
-        faEllipsisVertical
+        faEllipsisVertical,
+        faMagnifyingGlass
     );
     kiwi.state.isMobile = (function () {
         let check = false;
@@ -121,7 +130,8 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         data() {
             return {
                 frame: null,
-                buffer: null
+                buffer: null,
+                draw: null
             }
         },
         watch: {
@@ -157,7 +167,6 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
             });
             const draw = () => {
                 if (!this) return;
-                this.frame = requestAnimationFrame(draw);
                 /**
                * @type {AnalyserNode}
                */
@@ -186,7 +195,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
 
                 }
             };
-            draw();
+            this.draw = draw;
         }
     }
     const media = {
@@ -225,11 +234,6 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 }])
                 const ret = entries
                     .flatMap(([id, cnx]) => (cnx?.streams || []).filter(s => s.active).map(stream => ({ ...cnx, id, stream })))
-                    .sort((a, b) => {
-                        let _a = a.stream.id === this.$state.pinned ? -1 : 0;
-                        let _b = b.stream.id === this.$state.pinned ? -1 : 0;
-                        return _a - _b;
-                    })
                 log.debug("feeds?", ret);
                 log.debug("entries?", entries);
                 return ret;
@@ -251,11 +255,11 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
     }
     const UserAvatar = kiwi.require('components/UserAvatar');
     const peer = {
-        props: ['feed', 'pinned'],
+        props: ['feed', 'pinned', 'cellWidth', 'colSpan', 'gridTemplateColumns', 'visible'],
         emits: ['togglePin',],
         components: { UserAvatar, AudioVisualization: audioVisualization },
         template: `
-            <div class="peer"  :data-user-id="feed.id" :data-stream-id="feed.stream.id">
+            <div class="peer"  :class="{pinned}" :data-user-id="feed.id" :data-stream-id="feed.stream.id">
                 <div class="vid-container" ref="container">
                      <div class="video-controls"  :key="state">
                         <div class="video-info">
@@ -306,6 +310,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                         autoplay
                         playsinline
                         :data-muted="isMe"
+                        
                         :muted="isMe" 
                         :data-user-id="feed.id"
                     >
@@ -335,6 +340,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     <canvas
                         :class="{visible: videoEnabled}"
                         ref="vid"
+                        
                         class="live-vid"
                         :data-user-id="feed.id"
                         :data-nick="user.nick"
@@ -351,11 +357,12 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
             this.$nextTick(() => {
                 this.attachStream();
                 this.setup();
+                this.onUpdate();
             });
             /**
              * @type {MediaStream}
              */
-            const stream = this.feed.stream
+            // const stream = this.feed.stream
             // stream.getTracks()
             //     .forEach(t => {
             //         t.onmute = e => (t.kind === 'video' ? setVideo : setAudio)({ stream, target: this.buffer, net: this.network }, false);
@@ -428,10 +435,19 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 } else {
                     this.settings.videoSize = { ...this.defaults.videoSize };
                 }
-                this.resetCamDimensions();
+                this.updateDimensions();
             }
         },
         methods: {
+            updateDimensions() {
+                if (this.pinned) {
+                    this.$el.style.gridColumn = `1 / span ${this.gridTemplateColumns}`;
+                    this.$el.style.gridRowStart = '1';
+                } else {
+                    this.$el.style.gridColumn = `unset`;
+                    this.$el.style.gridRowStart = `unset`;
+                }
+            },
             toggleControls(e) {
                 this.forceShowControls = !this.forceShowControls
                 if (!this.forceShowControls) return;
@@ -454,20 +470,9 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     document.addEventListener('click', listener);
                 }, 50);
             },
-            setFallbackSize() {
-                this.$nextTick(() => {
-                    const canvas = this.$refs.vid;
-                    const fallback = this.$refs.fallback;
-                    if (fallback) {
-                        const canvasBounds = canvas.getBoundingClientRect();
-                        if (canvasBounds.height) fallback.style.height = canvasBounds.height + 'px';
-                        if (canvasBounds.width) fallback.style.width = canvasBounds.width + 'px';
-                    }
-                    this.resetCamDimensions();
-                })
-            },
             onUpdate() {
-                this.resetCamDimensions();
+                this.updateDimensions();
+
             },
             async setupTranscription() {
                 /**
@@ -531,18 +536,13 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 }
 
             },
-            resetCamDimensions(attempt = 0) {
-                if (attempt > 32) return;
-                const cam = this.$refs.cam;
-                if (!cam) return setTimeout(() => this.resetCamDimensions(attempt + 1), 100 * attempt);
-                cam.style.height = cam.style.width = 'auto';
-                this.hasCamDimensions = false;
-            },
+
             setup() {
                 /**
                  * @type {HTMLCanvasElement}
                  */
                 const canvas = this.$refs.vid;
+                // this.setupZoom();
                 /**
                  * @type {HTMLVideoElement}
                  */
@@ -551,10 +551,13 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 const ctx = canvas.getContext('2d');
                 const isMe = this.isMe;
                 let volume = 0;
-                this.hasCamDimensions = false;
+                /**
+                 * @type {HTMLDivElement}
+                 */
+                const el = this.$el;
                 const prev = {};
                 const draw = async (timestamp) => {
-                    if (!this.feed || !this.$refs.cam) return;
+                    if (!this.feed || !this.$refs.cam || !this.visible) return;
                     this.frame = requestAnimationFrame(draw);
                     let elapsed;
                     if (prev.main) {
@@ -562,65 +565,54 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     } else {
                         prev.main = timestamp;
                     }
-                    const audioOutput = this.$refs.audioOutput;
-                    const volumeIndicator = this.$refs.volumeIndicator;
-                    if (audioOutput && volumeIndicator) {
 
-                        /**
-                            * @type {Uint8Array}
-                            */
-                        const buf = audioOutput.buffer;
-                        const data = [...buf.values()].map(d => (d - 128) ** 4);
-                        const avg = data.reduce((avg, d) => avg += d / data.length, 0);
-                        const newVolume = avg / 128;
-                        volume = (!volume || newVolume > volume) ? newVolume : volume - (volume / 8);
-                    }
+                    // const volumeIndicator = this.$refs.volumeIndicator;
+                    // if (audioOutput && volumeIndicator) {
+
+                    //     /**
+                    //         * @type {Uint8Array}
+                    //         */
+                    //     const buf = audioOutput.buffer;
+                    //     const data = [...buf.values()].map(d => (d - 128) ** 4);
+                    //     const avg = data.reduce((avg, d) => avg += d / data.length, 0);
+                    //     const newVolume = avg / 128;
+                    //     volume = (!volume || newVolume > volume) ? newVolume : volume - (volume / 8);
+                    // }
                     if (!elapsed || elapsed < (1000 / this.settings.frameRate)) return;
+                    
+                    const bounds = el.getBoundingClientRect();
+                    if (
+                        (bounds.right < 0 || bounds.left > (document.documentElement.clientWidth || window.innerWidth)) ||
+                        (bounds.bottom < 0 || bounds.top > (document.documentElement.clientHeight || window.innerHeight)) 
+                    ) {
+                        return;
+                    }
                     prev.main = timestamp;
 
 
+                    const audioOutput = this.$refs.audioOutput;
+                    audioOutput?.draw instanceof Function && audioOutput.draw();
+                    // if (audioOutput && volumeIndicator) {
+                    //     let elapsed;
+                    //     if (prev.volumeIndicator) {
+                    //         elapsed = timestamp - prev.volumeIndicator
+                    //     } else {
+                    //         prev.volumeIndicator = timestamp;
+                    //     }
+                    //     if (!elapsed || elapsed < (1000 / this.settings.volumeUpdateRate)) return;
+                    //     prev.volumeIndicator = timestamp;
 
-                    if (audioOutput && volumeIndicator) {
-                        let elapsed;
-                        if (prev.volumeIndicator) {
-                            elapsed = timestamp - prev.volumeIndicator
-                        } else {
-                            prev.volumeIndicator = timestamp;
-                        }
-                        if (!elapsed || elapsed < (1000 / this.settings.volumeUpdateRate)) return;
-                        prev.volumeIndicator = timestamp;
+                    //     const percent = volume;
+                    //     volumeIndicator.style.transform = `scale(${Math.min(((percent)), 2)})`;
+                    //     volumeIndicator.style.opacity = Math.min(percent, 0.6);
 
-                        const percent = volume;
-                        volumeIndicator.style.transform = `scale(${Math.min(((percent)), 2)})`;
-                        volumeIndicator.style.opacity = Math.min(percent, 0.6);
-
-                    }
+                    // }
                     // log.debug("elapsed:", elapsed);
                     const W = cam.videoWidth;
                     const H = cam.videoHeight;
-                    if (!this.hasCamDimensions && W && W) {
-                        this.setFallbackSize();
-                        this.hasCamDimensions = true;
-                        this.$nextTick(() => {
+                    canvas.height = cam.offsetHeight;
+                    canvas.width = cam.offsetWidth;
 
-                            cam.style.height = cam.style.width = '0';
-                        });
-
-                    }
-                    const rect = cam.getBoundingClientRect();
-                    if (rect) {
-                        if (rect.height) canvas.height = rect.height;
-                        if (rect.width) canvas.width = rect.width;
-                        // canvas.style.width = `${this.settings.videoSize.width}`;
-                        this.$refs.fallback.style.width = canvas.style.width = `${this.settings.videoSize.width}`;
-                        const canvasBounds = canvas.getBoundingClientRect();
-                        if (canvasBounds.width) this.$refs.fallback.style.width = canvasBounds.width + 'px';
-                        
-                        // const canvasBounds = canvas.getBoundingClientRect();
-                        // container.style.maxWidth = canvasBounds.width + 'px';
-                        // container.style.maxHeight = canvasBounds.height + 'px';
-
-                    }
                     if (!this.videoEnabled) return;
                     if (this.isMyCam) {
 
@@ -820,7 +812,36 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
             // MediaViewer,
             Peer: peer
         },
+
         methods: {
+            setupZoom(attempt = 0) {
+                if (attempt > 32) return;
+                const el = this.$refs.grid;
+                if (!el) return setTimeout(() => this.setupZoom(attempt + 1), 50 * attempt);
+                this.panzoom = Panzoom(el, {
+                    onTouch(e) {
+                        return false;
+                    }
+                })
+                const scroller = el;
+                const self = this;
+                // This demo binds to shift + wheel
+                scroller.addEventListener('wheel', function f(event) {
+                    if (event.target !== scroller) return;
+                    if (!this.panzoom) {
+                        self.$nextTick(() => self.setupZoom())
+                        return scroller.removeEventListener('wheel', f);
+                    }
+                    this.panzoom.zoomWithWheel(event)
+                });
+
+            },
+            resetZoom() {
+                if (this.panzoom) {
+                    this.panzoom.moveTo(0, 0);
+                    this.panzoom.smoothZoomAbs(0, 0, 1);
+                }
+            },
             resize() {
                 this.$state.$emit('conference-lite.resize');
             },
@@ -968,6 +989,34 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
             transcriptionsEnabled() {
                 this.state;
                 return this.$state.transcriptionsEnabled;
+            },
+            gridTemplateColumns() {
+                return (window.innerWidth < BREAKPOINT ? 2 : Math.min(this.feeds.length, 8));
+            },
+            cellWidth() {
+                this.state;
+                return 1 / this.gridTemplateColumns;
+            },
+            cellWidthPct() {
+                this.state;
+                return this.cellWidth * 100 + '%';
+            },
+            cellWidthPx() {
+                this.state;
+                /**
+                 * @type {HTMLDivElement}
+                 */
+                const grid = this.$refs.grid;
+                return this.cellWidth * grid.offsetWidth;
+            },
+            colSpan() {
+                this.state;
+                const atBreakpoint = window.innerWidth < BREAKPOINT;
+                return atBreakpoint ? 2 : 4;
+            },
+            visibleFeeds() {
+                this.state;
+                return this.$state.visibleFeeds;
             }
         },
         data() {
@@ -976,19 +1025,44 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         },
         mounted() {
             this.$state.$on('conference-lite.update', this.update);
+            this.$state.visibleFeeds ??= {};
+            this.setupZoom();
+            const observer = new IntersectionObserver(entries => {
+                log.debug("observer:", entries);
+                entries.forEach(e => {
+                    this.$state.visibleFeeds[e.target.dataset.id] = e.isIntersecting();
+                })
+                this.update();
+            }, {
+                root: this.$refs.conferenceContainer
+            });
+            this.observer = observer;
+
         },
         template: `
-        <div :class={fullscreen} class="conference conference-container" v-resizeobserver="resize">
-            <div class="conference">
-                <peer
-                    v-for="feed in feeds" 
-                    :key="feed.stream.id"
-                    :component="peer" 
-                    v-bind="{ network, buffer, feed }"
-                    :pinned="pinned===feed.stream.id"
-                    @toggle-pin="() => togglePin(feed.stream.id)"
-                />
-                <div class="conference-controls">
+        <div class="kiwi-conference">
+            <div :class={fullscreen} class="conference-container" ref="conferenceContainer" v-resizeobserver="resize">
+                <div 
+                    class="conference" 
+                    ref="grid" 
+                    :style="'grid-template-columns: repeat('+gridTemplateColumns+', '+cellWidthPct+');'"
+                    
+                >
+                    <peer
+                        :cell-width="cellWidth"
+                        :grid-template-columns="gridTemplateColumns"
+                        :data-id="feed.stream.id"
+                        v-for="feed in feeds" 
+                        :key="feed.stream.id"
+                        :visible="[true,undefind].includes(visibleFeeds[feed.stream.id])"
+                        :component="peer" 
+                        v-bind="{ network, buffer, feed }"
+                        :pinned="pinned===feed.stream.id"
+                        @toggle-pin="() => togglePin(feed.stream.id)"
+                    />
+                </div>
+            </div>
+            <div class="conference-controls">
                     <div class="conference-controlbar">
                         <control-btn
                             @click="leaveCall"
@@ -997,12 +1071,16 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                             text-class="u-button-warning"
                             :icon-props="{transform: {rotate: 135}}"
                         />  
-                        
                         <control-btn
                             @click="screenShare"
                             icon="person-chalkboard"
                             title="Screen Share"
                             text-class="u-button-primary"
+                        />
+                        <control-btn
+                            @click="resetZoom"
+                            icon="magnifying-glass"
+                            title="rset-zoom"
                         />  
                         <control-btn
                             @click="toggleTranscriptions"
@@ -1015,7 +1093,6 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                             title="Background Blur"
                         />
                     </div>
-                </div>
             </div>
         </div>`,
 
@@ -1371,6 +1448,25 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         const peer = kiwi.state?.peers?.[user.id];
         nickUserId[nick] = user.id;
         return peer;
+    }
+    function reduce(numerator, denominator) {
+        var gcd = function gcd(a, b) {
+            return b ? gcd(b, a % b) : a;
+        };
+        gcd = gcd(numerator, denominator);
+        return [numerator / gcd, denominator / gcd];
+    }
+    function even(n) {
+        return ((n + 1) >> 1) << 1;
+    }
+    function getCellDimensions(width, height, maxRowspan, maxColspan) {
+        while (width > maxColspan || height > maxRowspan) {
+            const [w, h] = reduce(even(width), even(height));
+            width = w;
+            height = h;
+            console.log({ width, height });
+        }
+        return [width, height];
     }
     function mkPeer(id) {
         return {
