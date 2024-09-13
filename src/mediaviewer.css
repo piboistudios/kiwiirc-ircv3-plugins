@@ -152,6 +152,7 @@
 
 .kiwi-main-mediaviewer {
     max-height: unset !important;
+    width: 100% !important;
 }
 
 @media screen and (max-width: 769px) {
