@@ -62,7 +62,7 @@
 
 .conference-controls {
     position: absolute;
-    bottom: 0;
+    bottom: 56px;
     display: flex;
     justify-content: center;
     margin-top: 16px;
@@ -72,11 +72,13 @@
     grid-column: 1 / 16;
 }
 
+.kiwi-conference:hover .conference-controlbar {
+    opacity: 1;
+}
+
 .conference-controls .conference-controlbar {
     display: flex;
     justify-content: space-around;
-
-
     padding: 2px;
     border-radius: 8px;
     background: var(--brand-default-bg);
@@ -85,12 +87,23 @@
     width: 50%;
     margin: auto;
     min-height: 3em;
+    transition: opacity ease-in-out 0.25s;
+    opacity: 0;
 }
 
 .in-reply-to {
     margin-right: 8px;
 }
-
+.video-nick {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+}
+.video-nick a {
+    font-weight: bold;
+    font-size: 5em;
+    /* transition: opacity 1 */
+}
 .peer {
     margin-bottom: 8px;
     /* background: var(--comp-usermenu-open-bg); */
@@ -101,7 +114,7 @@
     flex-wrap: wrap;
 }
 
-.peer:hover .video-controls .control {
+.video-controls.active .control {
     opacity: 1;
 }
 
@@ -312,7 +325,19 @@
 .kiwi-messageinfo-reply .fa-face-smile {
     transform: translate(14px, 3px);
 }
-
+.kiwi-messageinfo-actions .kiwi-messageinfo-reply,.kiwi-messageinfo-actions .kiwi-messageinfo-conference {
+    background: var(--brand-primary);
+    color: white !important;
+    /* color: var(--brand-default-bg); */
+}
+.kiwi-messageinfo-conference {
+    padding: 8px;
+}
+.call-started.kiwi-messageinfo-actions {
+    display: flex;
+    width: 100%;
+    justify-content: center;
+}
 .fa-stack-2x {
     position: relative;
 }

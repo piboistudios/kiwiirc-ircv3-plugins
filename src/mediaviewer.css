@@ -1,0 +1,166 @@
+.vdr {
+    touch-action: none;
+    position: absolute;
+    box-sizing: border-box;
+    border: 1px dashed black
+}
+
+.handle {
+    box-sizing: border-box;
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background: #EEE;
+    border: 1px solid #333
+}
+
+.handle-tl {
+    top: -10px;
+    left: -10px;
+    cursor: nw-resize
+}
+
+.handle-tm {
+    top: -10px;
+    left: 50%;
+    margin-left: -5px;
+    cursor: n-resize
+}
+
+.handle-tr {
+    top: -10px;
+    right: -10px;
+    cursor: ne-resize
+}
+
+.handle-ml {
+    top: 50%;
+    margin-top: -5px;
+    left: -10px;
+    cursor: w-resize
+}
+
+.handle-mr {
+    top: 50%;
+    margin-top: -5px;
+    right: -10px;
+    cursor: e-resize
+}
+
+.handle-bl {
+    bottom: -10px;
+    left: -10px;
+    cursor: sw-resize
+}
+
+.handle-bm {
+    bottom: -10px;
+    left: 50%;
+    margin-left: -5px;
+    cursor: s-resize
+}
+
+.handle-br {
+    bottom: -10px;
+    right: -10px;
+    cursor: se-resize
+}
+
+@media only screen and (max-width: 768px) {
+    [class*=handle-]:before {
+        content: "";
+        left: -10px;
+        right: -10px;
+        bottom: -10px;
+        top: -10px;
+        position: absolute
+    }
+}
+
+.kiwi-mediaviewer {
+    box-sizing: border-box;
+    position: relative !important;
+    ;
+    overflow: hidden;
+    width: 100%;
+    height: 0;
+    min-width: 100%;
+}
+
+.kiwi-mediaviewer-controls {
+    position: absolute;
+    top: 0;
+    right: 16px;
+    z-index: 1;
+    background: var(--brand-default-bg);
+    border-radius: 5px;
+    padding: 3px;
+    opacity: 0;
+    display: none;
+    transition: opacity 0.1s;
+    box-shadow: 0 1px var(--brand-input-border);
+}
+
+.kiwi-mediaviewer:hover .kiwi-mediaviewer-controls {
+    opacity: 1;
+    display: block;
+}
+
+.kiwi-mediaviewer-controls-close {
+    padding: 3px 15px;
+}
+
+.kiwi-mediaviewer-content {
+    height: 100%;
+    overflow: auto;
+}
+
+.kiwi-mediaviewer-iframe {
+    position: absolute;
+    height: 100%;
+    width: 100%;
+    top: 0;
+    border: none;
+}
+
+.kiwi-mediaviewer-resize-handle {
+    width: 100%;
+    background: var(--comp-sidebar-bg);
+    height: 32px;
+    color: var(--comp-border);
+    opacity: 0;
+    transition: opacity ease-in-out 0.2s;
+    border-top: 1px solid var(--comp-border);
+    display: flex;
+    justify-content: center;
+    position: absolute;
+    bottom: 0;
+    align-items: center;
+}
+
+.kiwi-main-mediaviewer:hover .kiwi-mediaviewer-resize-handle {
+    opacity: 1;
+}
+
+.handle-bm {
+    width: 100%;
+    left: 0;
+    z-index: 3;
+
+    margin-left: 0;
+}
+
+.kiwi-main-mediaviewer {
+    max-height: unset !important;
+}
+
+@media screen and (max-width: 769px) {
+    .kiwi-mediaviewer-controls {
+        right: 6px;
+        opacity: 1;
+    }
+
+    .kiwi-mediaviewer-controls-close {
+        padding: 3px 7px;
+    }
+}

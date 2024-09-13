@@ -1,4 +1,8 @@
-const IrcMessage = require('irc-framework/src/ircmessage');
+// const IrcMessage = require('irc-framework/src/ircmessage');
+// const TextFormatting = kiwi.require('helpers/TextFormatting')
+const Resizable = import('./utils/draggable-resizable');
+const _ = require('lodash');
+require('./mediaviewer.css');
 /**
  * @type {import('panzoom').default}
  */
@@ -55,6 +59,9 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
     const {
         faMagnifyingGlass
     } = await import('@fortawesome/free-solid-svg-icons/faMagnifyingGlass')
+    const {
+        faAngleDown
+    } = await import('@fortawesome/free-solid-svg-icons/faAngleDown')
     kiwi.svgIcons.library.add(
         faPhone,
         faVideo,
@@ -71,7 +78,8 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         faCommentSlash,
         faEllipsis,
         faEllipsisVertical,
-        faMagnifyingGlass
+        faMagnifyingGlass,
+        faAngleDown
     );
     kiwi.state.isMobile = (function () {
         let check = false;
@@ -259,9 +267,12 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         emits: ['togglePin',],
         components: { UserAvatar, AudioVisualization: audioVisualization },
         template: `
-            <div class="peer"  :class="{pinned}" :data-user-id="feed.id" :data-stream-id="feed.stream.id">
+            <div @mouseleave="active = false" @mouseenter="active=true" @click="active=!active" class="peer"  :class="{pinned}" :data-user-id="feed.id" :data-stream-id="feed.stream.id">
                 <div class="vid-container" ref="container">
-                     <div class="video-controls"  :key="state">
+                    <div class="video-nick">
+                        <a class="kiwi-nick" :data-nick="user.nick" :style="'color:'+user.colour+';'">{{user.nick}}</a>
+                    </div>
+                     <div class="video-controls" :class="{active}"  :key="state">
                         <div class="video-info">
                                 <audio-visualization
                                     ref="audioOutput"
@@ -272,31 +283,32 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                                     :amplitude="16"
                                 />
                         </div>
+                      
                         <div ref="controls" class="control control-container":class="{mobile: $state.isMobile, 'controls-open': forceShowControls}">
                              <control-btn
                                 v-show="$state.isMobile"
                                 title="Settings" 
                                 icon="ellipsis"
-                                @click="toggleControls"
+                                @click.stop="toggleControls"
                             />
-                            <control-btn @click="toggleVideo" 
+                            <control-btn @click.stop="toggleVideo" 
                                 v-show="showControls"
                                 :title="videoEnabled ? 'Turn Off Camera' : 'Turn On Camera'" 
                                 :icon="videoEnabled ? 'video' : 'video-slash'"
                             />
-                            <control-btn @click="toggleAudio" 
+                            <control-btn @click.stop="toggleAudio" 
                                 v-show="showControls"
                                 :title="muted ? 'Unmute' : 'Mute'" 
                                 :icon="!muted ? 'microphone' : 'microphone-slash'"
                             />
-                            <control-btn @click="togglePin"
+                            <control-btn @click.stop="togglePin"
                                 v-show="showControls"
                                 :title="pinned ? 'Unpin' : 'Pin'"
                                 :icon="pinned ? 'thumbtack' : 'thumbtack-slash'"
                             />
                             <control-btn v-if="canFlipCam" 
                                 v-show="showControls"
-                                @click="flipCameraView"
+                                @click.stop="flipCameraView"
                                 title="Flip Camera"
                                 icon="camera-rotate"
                             />
@@ -399,6 +411,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 this.state;
                 return this.feed.id !== undefined && Object.values(this.network.users).find(u => u.id == this.feed.id);
             },
+
             videoEnabled() {
                 this.state;
                 return this.feed.stream.videoEnabled !== false && Boolean(this?.feed?.stream?.getVideoTracks?.()?.filter?.(v => v.enabled && !v.muted)?.length);
@@ -579,11 +592,11 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     //     volume = (!volume || newVolume > volume) ? newVolume : volume - (volume / 8);
                     // }
                     if (!elapsed || elapsed < (1000 / this.settings.frameRate)) return;
-                    
+
                     const bounds = el.getBoundingClientRect();
                     if (
                         (bounds.right < 0 || bounds.left > (document.documentElement.clientWidth || window.innerWidth)) ||
-                        (bounds.bottom < 0 || bounds.top > (document.documentElement.clientHeight || window.innerHeight)) 
+                        (bounds.bottom < 0 || bounds.top > (document.documentElement.clientHeight || window.innerHeight))
                     ) {
                         return;
                     }
@@ -769,6 +782,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         },
         data() {
             return {
+                active: false,
                 forceShowControls: false,
                 flippingCam: false,
                 hasCamDimensions: false,
@@ -805,7 +819,162 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
             }
         },
     };
+    const resizableMediaViewer = {
+        template: `
+            <resizable 
+                ref="root" 
+                :draggable="false" 
+                :active="true"
+                :resizable="true" 
+                w="auto" 
+                :h="h" 
+                :parent="true" 
+                class="kiwi-mediaviewer"
+                :handles="['bm']"
+            >
+                <template #bm>
+                    <div class="kiwi-mediaviewer-resize-handle">
+                        <svg-icon icon="angle-down"/>
+                    </div>
+                </template>
+        <div class="kiwi-mediaviewer-controls">
+            <a
+                v-if="showPin"
+                class="u-button u-link kiwi-mediaviewer-controls-pin"
+                @click="$emit('pin')"
+            >
+                <svg-icon icon="fa-solid fa-map-pin" />
+            </a>
+            <a
+                class="u-button u-button-warning kiwi-mediaviewer-controls-close"
+                @click="$emit('close');"
+            >
+                <svg-icon icon="fa-solid fa-rectangle-xmark" />
+            </a>
+        </div>
+        <div class="kiwi-mediaviewer-content" data-resizable="much-yes">
+            <iframe
+                v-if="isIframe"
+                ref="iframe"
+                :src="url"
+                :sandbox="iframeSandboxOptions"
+                class="kiwi-mediaviewer-iframe"
+            />
+            <component
+                :is="component"
+                v-else-if="component"
+                :component-props="componentProps"
+                v-bind="componentProps"
+                @close="$emit('close')"
+                @setHeight="setHeight"
+                @setMaxHeight="setMaxHeight"
+            />
+            <url-embed
+                v-else
+                :url="url"
+                :show-pin="showPin"
+                :iframe-sandbox-options="iframeSandboxOptions"
+                @close="$emit('close')"
+                @setHeight="setHeight"
+                @setMaxHeight="setMaxHeight"
+            />
+        </div>
+    </resizable>
+        `,
+        components: {
+            UrlEmbed: kiwi.require('components/UrlEmbed'),
+            Resizable: kiwi.Vue.defineAsyncComponent(() => Resizable)
+        },
+        props: ['url', 'component', 'componentProps', 'isIframe', 'showPin'],
+        emits: ['close', 'pin'],
+        data() {
+            return {
+                debouncedUpdateEmbed: null,
+                h: window.innerHeight / 2
+            };
+        },
+        computed: {
+            iframeSandboxOptions() {
+                // https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#attr-sandbox
+                // Mostly all permissions other than allow-top-navigation so that embedded content
+                // cannot redirect the page away from kiwi
+                let options = [
+                    'allow-downloads',
+                    'allow-forms',
+                    'allow-modals',
+                    'allow-orientation-lock',
+                    'allow-pointer-lock',
+                    'allow-popups',
+                    'allow-popups-to-escape-sandbox',
+                    'allow-presentation',
+                    'allow-same-origin',
+                    'allow-scripts',
+                ];
 
+                return options.join(' ');
+            },
+        },
+        watch: {
+            url() {
+                this.debouncedUpdateEmbed();
+            },
+            isIframe() {
+                this.debouncedUpdateEmbed();
+            },
+        },
+        created() {
+            // Debounce as both watchers may call it in the same tick
+            // also causes the method to be called next tick to give dom time to update
+            this.debouncedUpdateEmbed = _.debounce(() => {
+                this.updateEmbed(true);
+            }, 0);
+        },
+        mounted() {
+            this.updateEmbed(false);
+            this.$nextTick(() => {
+                this.emitEvent('opened');
+            });
+        },
+        methods: {
+            updateEmbed(shouldEmit) {
+                this.setMaxHeight('');
+
+                if (this.isIframe || this.component) {
+                    this.setHeight((this.isIframe) ? '40%' : 'auto');
+                }
+
+                if (shouldEmit) {
+                    this.emitEvent('updated');
+                }
+            },
+            emitEvent(type) {
+                const event = {
+                    isInline: this.showPin || false,
+                };
+                if (this.isIframe) {
+                    event.type = 'iframe';
+                    event.iframe = this.$refs.iframe;
+                    event.url = this.url;
+                } else if (this.component) {
+                    event.type = 'component';
+                    event.component = this.component;
+                    event.componentProps = this.componentProps;
+                } else {
+                    event.type = 'embed';
+                    event.url = this.url;
+                }
+                this.$state.$emit(`mediaviewer.${type}`, event);
+            },
+            setHeight(newHeight) {
+                if (this.$refs?.root?.$el?.style) this.$refs.root.$el.style.height = newHeight;
+            },
+            setMaxHeight(newHeight) {
+                if (this.$refs?.root?.$el?.style) this.$refs.root.$el.style.maxHeight = newHeight;
+            },
+        },
+
+
+    };
     const conference = {
         mixins: [media],
         components: {
@@ -834,12 +1003,14 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     }
                     this.panzoom.zoomWithWheel(event)
                 });
+                this.panzoom.smoothZoomAbs(0, 0, 0.9);
+
 
             },
             resetZoom() {
                 if (this.panzoom) {
                     this.panzoom.moveTo(0, 0);
-                    this.panzoom.smoothZoomAbs(0, 0, 1);
+                    this.panzoom.smoothZoomAbs(0, 0, 0.9);
                 }
             },
             resize() {
@@ -856,6 +1027,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
             toggleBackgroundBlur() {
                 if (this.$state.backgroundFx) {
                     this.$state.backgroundFx = null;
+                    return;
                 }
                 this.$state.backgroundFx = {
                     fg: { r: 0, g: 0, b: 0, a: 0 },
@@ -863,7 +1035,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     foregroundThreshold: 0.5,
                     maskOpacity: 1,
                     maskBlur: 0,
-                    type: 'binaryMask',
+                    type: 'bokeh',
                     backgroundBlur: 100,
                     edgeBlur: 3,
                 }
@@ -924,6 +1096,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 this.update();
             },
             async leaveCall() {
+                if (!this.$state.callState) return;
                 this.$state.tracks = [];
                 typeof this.$state.outputFeeds === 'object' && Object.values(this.$state.outputFeeds).forEach(s => {
                     s.getTracks().forEach(t => t.stop() && s.removeTrack(t));
@@ -949,7 +1122,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
 
                 delete this.$state.localStreamReady;
                 this.$state.emit('mediaviewer.hide');
-                net.ircClient.mode(buf.name, '-x', net.nick);
+                this.$state.callState && net.ircClient.mode(buf.name, '-x', net.nick);
                 Object.entries(this.$state.peers).forEach(([id, peer]) => {
                     /**
                      * @type {RTCPeerConnection}
@@ -977,6 +1150,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     recognition.onnomatch = null;
                     recognition.onsoundend = null;
                     recognition.onsoundstart = null;
+                    delete this.$state.recognition;
                 }
                 this.update();
             },
@@ -1037,6 +1211,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 root: this.$refs.conferenceContainer
             });
             this.observer = observer;
+            this.$state.leaveCall = this.leaveCall;
 
         },
         template: `
@@ -1049,6 +1224,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     
                 >
                     <peer
+                        @dblclick="showUser(feed.stream.id)"
                         :cell-width="cellWidth"
                         :grid-template-columns="gridTemplateColumns"
                         :data-id="feed.stream.id"
@@ -1097,15 +1273,35 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         </div>`,
 
     }
-    kiwi.addUi('header_channel', {
-        template: `<div ref="root">
-            <a @click="joinCall" title="Conference Call">
-                <svg-icon icon="phone" class="tooltip-trigger"/>
-                <span class="tooltip">Conference Call</span>
+    const conferenceBtn = {
+        template: `<div :class="!message ? '' : 'kiwi-messageinfo-actions call-started'" v-if="show" ref="root">
+            <a :class="!message ? '' : 'u-link kiwi-messageinfo-conference'" @click.stop="joinCall" title="Conference Call">
+
+                <svg-icon v-if="!message" icon="phone" class="tooltip-trigger"/>
+                <span v-if="!message" class="tooltip">Conference Call</span>
+                <span v-if="message">Join Call</span>
             </a>
         </div>
         `,
-        props: ['pluginState'],
+        computed: {
+            show() {
+                return (
+                    (
+                        !this.message
+                        ||
+                        (
+                            (this.message.type === 'conference_started') ||
+                            (this.message.tags?.["lou.network/conference-started"] !== undefined)
+                        )
+                    ) &&
+                    (this.hasConference)
+                )
+            },
+            hasConference() {
+                return this.buffer.modes.W !== undefined;
+            }
+        },
+        props: ['pluginState', "message", "buffer", "messagelist", "color"],
         mixins: [media],
         data() {
             return {
@@ -1115,6 +1311,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
         methods: {
 
             async joinCall() {
+                if (!this.hasConference && !this.$state.callState) return;
                 this.$state.segmenter ??= await bodySegmentation.createSegmenter(bodySegmentation.SupportedModels.MediaPipeSelfieSegmentation, {
                     runtime: 'mediapipe',
                     solutionPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation',
@@ -1127,7 +1324,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                 /**
                  * @type {import('../../kiwiirc/src/libs/state/NetworkState').default}
                  */
-                const net = this.network;
+                const net = this.network || this.$state.getNetwork(this.buffer.networkid);
                 kiwi.state.localStreamReady ??= new Promise((resolve, reject) => {
                     kiwi.state.beginLocalStream = resolve;
                     kiwi.state.cancelLocalStream = reject;
@@ -1137,8 +1334,8 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     componentProps: {
                         pluginState: this.pluginState,
                         sidebarState: this.sidebarState,
-                        network: this.network,
-                        buffer: this.buffer,
+                        network: net,
+                        buffer: buf,
                     }
                 });
                 await ensureLocalStream();
@@ -1181,7 +1378,10 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
 
             }
         }
-    });
+    }
+    kiwi.replaceModule('components/MediaViewer', resizableMediaViewer);
+    kiwi.addUi('message_append', conferenceBtn)
+    kiwi.addUi('header_channel', conferenceBtn);
     async function ensureLocalStream() {
         kiwi.state.localStream ??= await getUserMedia();
         kiwi.state.localStreams ??= [];
@@ -1494,6 +1694,83 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
     }))
 
     if (!network) network = kiwi.state.getActiveNetwork();
+    const CONFERENCE_MODES = ['W', 'x'];
+    kiwi.state.$on('irc.mode', (event, _, result) => {
+        const buf = network.bufferByName(event.target);
+
+        const historical = event?.batch?.type === 'chathistory';
+        log.debug("modes historical?", historical);
+        const eventTime = (event && event.time) ?
+            network.ircClient.network.timeToLocal(event.time) :
+            Date.now();
+        const hasMeetingMode = event.modes.find(m => CONFERENCE_MODES.includes(m.mode.charAt(1)))
+
+        const serverTime = (event && event.time) || 0;
+        hasMeetingMode && event.modes.forEach(mode => {
+
+            const leaveMeetingMode = mode.mode === '-x';
+            const joinMeetingMode = mode.mode === '+x';
+            const meetingMode = mode.mode.charAt(1) === 'W';
+            if (!mode) return; ``
+            if (meetingMode) {
+                const setting = mode.mode.charAt(0);
+                if (setting !== '+' && setting !== '-') return;
+                const [verb, article] = setting === '+' ? ['started', 'a'] : ['ended', 'the'];
+                if (!historical) {
+
+                    if (setting === '+') buf.modes.W = null;
+                    else delete buf.modes.W;
+                }
+                kiwi.state.addMessage(buf, {
+                    time: eventTime,
+                    server_time: serverTime,
+                    nick: '',
+                    message: `${event.nick} has ${verb} ${article} conference call.`,
+                    type: 'conference_' + verb
+                });
+                return;
+            }
+            const targets = mode.param.split(',');
+            log.debug("got mode", event.modes);
+
+            targets.map(nick => {
+                if (leaveMeetingMode) {
+                    if (event.nick !== network.nick && nick === network.nick) {
+                        return kiwi.state.leaveCall();
+                    }
+                    const peer = getPeer(nick);
+                    if (peer) removePeer(peer);
+                }
+                /**
+                 * @type {import('../../kiwiirc/src/libs/state/UserState').default}
+                 */
+                const user = buf.users[nick.toUpperCase()];
+                const umodes = user.buffers[buf.id].modes;
+                if (!user) return;
+                const modeChar = mode.mode.charAt(1);
+                const modeIdx = umodes.indexOf(modeChar);
+                if (!historical) {
+
+                    leaveMeetingMode && modeIdx !== -1 && umodes.splice(modeIdx, 1);
+                    joinMeetingMode && umodes.push(modeChar);
+                }
+                const action = (modeIdx !== -1 && leaveMeetingMode) ? 'left' : (modeIdx === -1 && joinMeetingMode) ? 'joined' : null;
+                const modAction = v => action === 'left' ? `removed ${v} from` : `added ${v} to`;
+                const self = event.nick === nick;
+                return action && kiwi.state.addMessage(buf, {
+                    time: eventTime,
+                    server_time: serverTime,
+                    nick: '',
+                    message: self ?
+                        `${nick} has ${action} the call.` :
+                        `${event.nick} has ${modAction(nick)} the call.`,
+                    type: "call_" + action
+                });
+            });
+        });
+        result.handled = hasMeetingMode;
+
+    });
     network.ircClient.use(
         /**
             * 
@@ -1502,10 +1779,14 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
             * @param {import('middleware-handler')} parsed 
             */
         (client, raw, parsed) => {
-            const historical = event?.batch?.type === 'chathistory';
-            if (historical) return next();
+
             parsed.use(async (event_name, event, client, next) => {
+
+
+
                 log.debug('got event...?', event);
+                const historical = event?.batch?.type === 'chathistory';
+                if (historical) return next();
                 if (event_name === 'quit') {
                     const peer = getPeer(event.nick);
                     removePeer(peer);
@@ -1515,20 +1796,6 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                         const peer = getPeer(event.nick);
                         removePeer(peer);
                     }
-                }
-                if (event_name === 'mode') {
-                    const leaveMeetingMode = event.modes.find(m => m.mode === '-x');
-                    log.debug("got mode", event.modes);
-                    if (leaveMeetingMode) {
-
-                        const peer = getPeer(leaveMeetingMode.param);
-                        removePeer(peer);
-                    }
-                    const buf = network.bufferByName(event.target);
-                    // return kiwi.state.addMessage(buf, {
-                    //     leftMeeting: true,
-                    //     ...event
-                    // })
                 }
                 if (event_name.toUpperCase() === 'TAGMSG') {
                     const ignore = event.target !== network.nick && event.tags["+draft/conf-cmd"] !== "SETTINGS";

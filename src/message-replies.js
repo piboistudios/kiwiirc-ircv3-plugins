@@ -34,32 +34,32 @@ kiwi.plugin('message-replies', async function (kiwi, log) {
             setEmojiMartClasses();
         }, 1)
     }
-     /** sometimes you just gotta hack shit together....
-         * this is bc absolute positioned elements get cut off by overflow: hidden, but
-         *  fixed elements are, well, fixed... this will make a fixed element, e.g.
-         *  the emoji mart behave like a relative one
-         * 
-         * console learnings:
-         * bottom to top of btn
-         * mart.style.top = ((mart.parentElement.getBoundingClientRect().top - mart.getBoundingClientRect().height) + 16)+ 'px';
-         *     window.bottomFn = spam((mart) => {mart.style.top = ((mart.parentElement.getBoundingClientRect().bottom + mart.parentElement.getBoundingClientRect()))+ 'px';});
-    window.topFn = spam((mart) => {mart.style.top = (((mart.parentElement.getBoundingClientRect().top)) - mart.getBoundingClientRect().height+24) + 'px';console.log({mart: mart.getBoundingClientRect(), parent: mart.parentElement.getBoundingClientRect(), container: container.getBoundingClientRect() }) })
+    /** sometimes you just gotta hack shit together....
+        * this is bc absolute positioned elements get cut off by overflow: hidden, but
+        *  fixed elements are, well, fixed... this will make a fixed element, e.g.
+        *  the emoji mart behave like a relative one
+        * 
+        * console learnings:
+        * bottom to top of btn
+        * mart.style.top = ((mart.parentElement.getBoundingClientRect().top - mart.getBoundingClientRect().height) + 16)+ 'px';
+        *     window.bottomFn = spam((mart) => {mart.style.top = ((mart.parentElement.getBoundingClientRect().bottom + mart.parentElement.getBoundingClientRect()))+ 'px';});
+   window.topFn = spam((mart) => {mart.style.top = (((mart.parentElement.getBoundingClientRect().top)) - mart.getBoundingClientRect().height+24) + 'px';console.log({mart: mart.getBoundingClientRect(), parent: mart.parentElement.getBoundingClientRect(), container: container.getBoundingClientRect() }) })
 
-         */
-        /**
-         * top to bottom of btn
-         * temp5.style.top = ((temp6.getBoundingClientRect().top) + temp6.getBoundingClientRect().height*2)+ 'px';
-         */
+        */
+    /**
+     * top to bottom of btn
+     * temp5.style.top = ((temp6.getBoundingClientRect().top) + temp6.getBoundingClientRect().height*2)+ 'px';
+     */
     const spamIt = fn => (...args) => { const interval = setInterval(() => fn(...args), 50); setTimeout(() => clearInterval(interval), 1000) }
     function setEmojiMartClasses() {
         const container = document.querySelector('.kiwi-container-content').getBoundingClientRect();
 
         const marts = document.querySelectorAll('.kiwi-emoji-mart.active');
-       
+
         marts.forEach(spamIt(mart => {
             const rect = mart.getBoundingClientRect();
             const parent = mart.parentElement.getBoundingClientRect();
-          
+
             if ((parent.bottom) > (container.bottom - container.height / 2)) {
                 mart.classList.add('top');
                 mart.classList.remove('bottom');
@@ -594,6 +594,7 @@ kiwi.plugin('message-replies', async function (kiwi, log) {
     })
     kiwi.addUi('message_prepend', prepend);
     kiwi.addUi('message_append', append);
+    
     // kiwi.addUi('message_append', component);
     kiwi.addUi('message_info', reply);
     kiwi.addUi('message_info', react);
