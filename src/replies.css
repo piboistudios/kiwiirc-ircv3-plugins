@@ -593,7 +593,7 @@ ul.dropdown-menu li {
     height: auto;
     width: auto;
 }
-.react-emoji-mart {
+.message-react-emoji-mart,.react-emoji-mart {
     position: fixed;
     transform: translateY(-32px);
     transition: opacity ease-in-out 0.2s;

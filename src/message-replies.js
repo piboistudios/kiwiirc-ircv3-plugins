@@ -136,19 +136,19 @@ kiwi.plugin('message-replies', async function (kiwi, log) {
                         <span  class="tooltip bottom text" style="width:64px;">Add reaction</span>
                         <svg-icon icon="fa-regular fa-face-smile" class="fa fa-stack-item fa-face-smile z-idx-up-2" aria-hidden="true" />
                         <svg-icon icon="fa fa-stack-item fa-stack-item-corner fa-plus" aria-hidden="true" /> 
-                          <emoji-picker
-                            ref="emoji-picker"
-                            :class="{active: reacting}"
-                            v-if="reacting"
-                            @click.stop
-                            v-bind="pickerProps"   
-                            :key="state"         
-                            :set="emojiSet"         
-                            :data="emojiIndex"          
-                            class="kiwi-emoji-mart message-react-emoji-mart"         
-                            @select="selectEmoji"     
-                          />
                     </span>
+                    <emoji-picker
+                        ref="emoji-picker"
+                        :class="{active: reacting}"
+                        v-if="reacting"
+                        @click.stop
+                        v-bind="pickerProps"   
+                        :key="state"         
+                        :set="emojiSet"         
+                        :data="emojiIndex"          
+                        class="kiwi-emoji-mart message-react-emoji-mart"         
+                        @select="selectEmoji"     
+                        />
                 </div>
             </div>
         `,
