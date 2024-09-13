@@ -1256,7 +1256,7 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                         <control-btn
                             @click="resetZoom"
                             icon="magnifying-glass"
-                            title="rset-zoom"
+                            title="Reset Zoom"
                         />  
                         <control-btn
                             @click="toggleTranscriptions"
