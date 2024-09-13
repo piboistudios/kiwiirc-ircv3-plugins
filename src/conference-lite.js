@@ -1003,14 +1003,14 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     }
                     this.panzoom.zoomWithWheel(event)
                 });
-                this.panzoom.smoothZoomAbs(0, 0, 0.9);
+                this.panzoom.smoothZoomAbs(0, 0, 1);
 
 
             },
             resetZoom() {
                 if (this.panzoom) {
                     this.panzoom.moveTo(0, 0);
-                    this.panzoom.smoothZoomAbs(0, 0, 0.9);
+                    this.panzoom.smoothZoomAbs(0, 0, 1);
                 }
             },
             resize() {

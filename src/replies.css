@@ -101,7 +101,7 @@
 }
 .video-nick a {
     font-weight: bold;
-    font-size: 5em;
+    font-size: 5vmin;
     /* transition: opacity 1 */
 }
 .peer {
