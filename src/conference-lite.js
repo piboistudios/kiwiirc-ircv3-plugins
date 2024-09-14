@@ -1738,23 +1738,29 @@ kiwi.plugin('conference-lite', async function (kiwi, log) {
                     if (event.nick !== network.nick && nick === network.nick) {
                         return kiwi.state.leaveCall();
                     }
-                    const peer = getPeer(nick);
-                    if (peer) removePeer(peer);
+                    if (!historical) {
+
+                        const peer = getPeer(nick);
+                        if (peer) removePeer(peer);
+                    }
                 }
                 /**
                  * @type {import('../../kiwiirc/src/libs/state/UserState').default}
                  */
                 const user = buf.users[nick.toUpperCase()];
-                const umodes = user.buffers[buf.id].modes;
-                if (!user) return;
-                const modeChar = mode.mode.charAt(1);
-                const modeIdx = umodes.indexOf(modeChar);
-                if (!historical) {
+                if (user) {
 
-                    leaveMeetingMode && modeIdx !== -1 && umodes.splice(modeIdx, 1);
-                    joinMeetingMode && umodes.push(modeChar);
+                    const umodes = user.buffers[buf.id].modes;
+                    const modeChar = mode.mode.charAt(1);
+                    const modeIdx = umodes.indexOf(modeChar);
+                    if (!historical) {
+
+                        leaveMeetingMode && modeIdx !== -1 && umodes.splice(modeIdx, 1);
+                        joinMeetingMode && umodes.push(modeChar);
+                    }
+                    if ((modeIdx === -1 && leaveMeetingMode) || (modeIdx !== -1 && joinMeetingMode)) return;
                 }
-                const action = (modeIdx !== -1 && leaveMeetingMode) ? 'left' : (modeIdx === -1 && joinMeetingMode) ? 'joined' : null;
+                const action = (leaveMeetingMode) ? 'left' : (joinMeetingMode) ? 'joined' : null;
                 const modAction = v => action === 'left' ? `removed ${v} from` : `added ${v} to`;
                 const self = event.nick === nick;
                 return action && kiwi.state.addMessage(buf, {
