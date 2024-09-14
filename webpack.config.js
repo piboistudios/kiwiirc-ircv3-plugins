@@ -19,13 +19,17 @@ module.exports = {
         path: path.resolve(__dirname, '..', 'public', 'javascripts', 'dist'),
         filename: '[name].js'
     },
+    externalsType: 'window',
+    externals: {
+        vue: ['kiwi', 'Vue'],
+    },
     resolve: {
         symlinks: false,
         fallback: {
             stream: require.resolve('stream-browserify'),
         },
         alias: {
-            vue$: path.resolve('../../kiwiirc/node_modules/vue/dist/vue.runtime.esm.js'),
+            vue: path.resolve('../kiwiirc/node_modules/vue/dist/vue.esm-bundler.js'),
         },
         // dedupe: ['vue'],
     },

@@ -4,9 +4,9 @@ import 'emoji-mart-vue-fast/css/emoji-mart.css';
 import EmojiData from 'emoji-mart-vue-fast/data/all.json';
 import * as config from './config.js';
 import * as EmojiProvider from '../plugin-emojis/src/libs/EmojiProvider.js';
-const { EmojiIndex, Picker } = kiwi.require('components/utils/VueEmojiMartFast');
 
-kiwi.plugin('emojis', (kiwi) => {
+kiwi.plugin('emojis', async (kiwi) => {
+    const { EmojiIndex, Picker } = await import('emoji-mart-vue-fast/src');
     config.setDefaults(kiwi);
 
     const emojiIndex = new EmojiIndex(EmojiData, {

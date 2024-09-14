@@ -7,17 +7,24 @@ const REPLY_COMMANDS = [
     "BATCH"
 ]
 
-const { Picker } = kiwi.require('components/utils/VueEmojiMartFast');
+
 const IrcMessage = require('irc-framework/src/ircmessage');
 const { v4: uuid } = require('uuid');
 require('emoji-mart-vue-fast/css/emoji-mart.css');
 
 const REACT_INTERNALS = Symbol('react');
 kiwi.plugin('message-replies', async function (kiwi, log) {
+    const { Picker } = await import('emoji-mart-vue-fast/src');
     const {
         faReply
     } = await import('@fortawesome/free-solid-svg-icons/faReply')
-    kiwi.svgIcons.library.add(faReply)
+    const {
+        faFaceSmile
+    } = await import('@fortawesome/free-regular-svg-icons/faFaceSmile')
+    kiwi.svgIcons.library.add(
+        faReply, 
+        faFaceSmile
+    );
 
 
     const HAS_LISTENERS = Symbol('has-emoji-listeners');
@@ -235,7 +242,7 @@ kiwi.plugin('message-replies', async function (kiwi, log) {
             <svg-icon @click.self.stop="scrollToReply" icon="reply" class="rotate-180"/>
             <span class="in-reply-to" @click.self.stop="scrollToReply">
             <template v-if="react">Reacted {{react}} in</template>
-            <template v-else>In</template> reply to <a class="u-link" @click.stop="onUserClick(subject.nick)" :style="\`color:\${subject.user.getColour()}\`"><strong>{{subject.nick}}</strong></a>: </span></div>
+            <template v-else>In</template> reply to <a class="u-link" @click.stop="onUserClick(subject.nick)" :style="\`color:\${subject?.user?.getColour?.() || 'unset'}\`"><strong>{{subject.nick}}</strong></a>: </span></div>
             <a
                 class="u-link"
                 style="margin:0;font-style: italic;"
@@ -286,7 +293,6 @@ kiwi.plugin('message-replies', async function (kiwi, log) {
             },
             subject() {
                 const ret = this.buffer.getMessages().find(m => m.tags && m.tags.msgid && m.tags.msgid === this.message.tags["+draft/reply"])
-                const color = ret?.user?.getColour?.() || 'unset';
                 return ret;
             },
 
@@ -472,7 +478,7 @@ kiwi.plugin('message-replies', async function (kiwi, log) {
                             </span>
                             <span v-else :class="{'active': reacting }" class="fa-stack-2x message-reaction tooltip-container z-idx-up-2">
                                 <span  class="message1-reaction-tip tooltip right center">Reaction</span>
-                                <svg-icon icon="fa-rgular fa-face-smile" class="fa fa-stack-item fa-face-smile z-idx-up-2" aria-hidden="true" />
+                                <svg-icon icon="fa-regular fa-face-smile" class="fa fa-stack-item fa-face-smile z-idx-up-2" aria-hidden="true" />
                                 <svg-icon icon="fa fa-stack-item fa-stack-item-corner fa-plus" aria-hidden="true" />
                                  <emoji-picker
                                     ref="emoji-picker"

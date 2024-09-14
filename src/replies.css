@@ -53,6 +53,9 @@
     opacity: 0;
     transition: opacity ease-in-out 0.25s;
 }
+.kiwi-conference, .conference-container {
+    height: 100%;
+}
 .kiwi-conference {
     overflow: hidden;
 }
