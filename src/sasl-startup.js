@@ -177,14 +177,23 @@ kiwi.plugin('sasl-oauth-external-startup', function (kiwi, log) {
             };
         },
         async created() {
+            const params = new URLSearchParams(location.search);
             window.addEventListener('beforeunload', () => {
                 forceSaveState();
             });
             await this.$state.persistence.loadStateIfExists();
             log.debug("saved connection options", JSON.stringify(this.$state.setting('connection.options') || null, null, 4));
             const oauth2 = this.$state.setting('oauth2');
-            let redirectUri = window.location.toString().slice(0, window.location.toString().indexOf('?'))
-            if (redirectUri.charAt(redirectUri.length - 1) === '/') redirectUri = redirectUri.slice(0, -1);
+            const url = new URL(location);
+            url.searchParams.delete('code');
+            const trail = url.toString().charAt(url.length-1) === '/' ? '/' : ''
+            history.replaceState({}, '', url + trail);
+            this.$nextTick(() => {
+                this.$state.history = new (kiwi.require('libs/History').History)(this.$state.setting('baseUrl') || '' + window.location)
+            })
+            let redirectUri = window.location.toString()
+            log.debug("redirect uri:", redirectUri);
+            // if (redirectUri.charAt(redirectUri.length - 1) === '/') redirectUri = redirectUri.slice(0, -1);
             function authorize(meta) {
                 redirectAuthorize({
                     serverMetadata: meta,
@@ -193,7 +202,6 @@ kiwi.plugin('sasl-oauth-external-startup', function (kiwi, log) {
                     scope: oauth2.scope
                 });
             }
-            const params = new URLSearchParams(location.search);
 
             /**
              * @type {{
