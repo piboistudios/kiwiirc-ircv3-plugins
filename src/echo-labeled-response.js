@@ -10,6 +10,45 @@ kiwi.plugin('labeled-response', function (kiwi, log) {
         evt.tags ??= {};
         if (!evt.tags.label) evt.tags.label = uuid();
     });
+    function getLabeledBuffer(state, buffer, message) {
+        const label = message.tags.label;
+        if (label !== undefined) {
+            state.labelBuffer ??= {};
+            if (!state.labelBuffer?.[label]) {
+                state.labelTimestamps ??= [];
+                const timestamp = Date.now();
+                state.labelBuffer[label] = buffer;
+                state.labelTimestamps.push({ label, timestamp });
+                let i = 0;
+                for (; i < state.labelTimestamps.length; i++) {
+                    const entry = state.labelTimestamps[i];
+                    if (entry.timestamp > timestamp - (1000 * 60)) {
+                        break;
+                    }
+                }
+                log.debug(
+                    'removing entries:',
+                    i,
+                    { ...state.labelBuffer },
+                    state.labelTimestamps.slice()
+                );
+                if (i > 0) {
+                    const entriesToRemove = state.labelTimestamps
+                        .splice(0, i);
+                    entriesToRemove.forEach((e) => {
+                        delete state.labelBuffer[e.label];
+                    });
+                }
+            } else {
+                buffer = state.labelBuffer[label];
+            }
+        }
+        return buffer;
+    }
+    const addMessage = kiwi.state.addMessage.bind(kiwi.state);
+    kiwi.state.addMessage = function addPotentiallyLabeledMessage(buffer, message) {
+        return addMessage(getLabeledBuffer(kiwi.state, buffer, message), message);
+    }
     /**
   * @type {typeof import('irc-framework/src/ircmessage')}
   */
@@ -25,7 +64,6 @@ kiwi.plugin('labeled-response', function (kiwi, log) {
         network.ircClient.use((client, raw, parsed) => {
             const { ircClient } = network;
             ircClient.raw = function raw(input) {
-                log.debug("input?", input, "is IrcMessage?", input instanceof IrcMessage);
                 // have to duck type...
                 if (!(input.to1459 instanceof Function)) {
                     if (typeof input === 'string' && input.indexOf(' ') !== -1) {
@@ -38,7 +76,6 @@ kiwi.plugin('labeled-response', function (kiwi, log) {
                 }
 
                 input.tags.label ??= uuid();
-                log.debug("sending", input);
                 return this.connection.write(input.to1459());
 
             }
