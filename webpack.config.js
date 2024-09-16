@@ -13,6 +13,7 @@ module.exports = {
         'message-redaction-webpacked': './src/message-redaction.js',
         'echo-labeled-response-webpacked': './src/echo-labeled-response.js',
         'conference-lite-webpacked': './src/conference-lite.js',
+        'url-handler-webpacked': './src/url-handler.js',
         // 'module/b/index': 'module/b/index.js',
     },
     output: {

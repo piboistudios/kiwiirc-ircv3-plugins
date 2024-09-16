@@ -178,13 +178,14 @@ kiwi.plugin('sasl-oauth-external-startup', function (kiwi, log) {
         },
         async created() {
             const params = new URLSearchParams(location.search);
+            kiwi.state.entrypoint = new URL('' + location);
             window.addEventListener('beforeunload', () => {
                 forceSaveState();
             });
             await this.$state.persistence.loadStateIfExists();
             log.debug("saved connection options", JSON.stringify(this.$state.setting('connection.options') || null, null, 4));
             const oauth2 = this.$state.setting('oauth2');
-            const url = new URL(location);
+            const url = new URL(this.$state.setting('baseURl') || '' + location);
             url.searchParams.delete('code');
             const trail = url.toString().charAt(url.length-1) === '/' ? '/' : ''
             history.replaceState({}, '', url + trail);
