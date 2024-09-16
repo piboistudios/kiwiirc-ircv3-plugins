@@ -1,3 +1,4 @@
+const parseIrcLine = require('irc-framework/src/irclineparser');
 const { v4: uuid } = require('uuid');
 const UI_MESSAGES = ['PRIVMSG', 'NOTICE'];
 kiwi.plugin('labeled-response', function (kiwi, log) {
@@ -12,7 +13,7 @@ kiwi.plugin('labeled-response', function (kiwi, log) {
     /**
   * @type {typeof import('irc-framework/src/ircmessage')}
   */
-    const { Message: IrcMessage } = require('irc-framework')
+    const { Message: IrcMessage, ircLineParser } = require('irc-framework')
     kiwi.on('start', () => {
         /**
          * @type {import('../../kiwiirc/src/libs/state/NetworkState').default}
@@ -27,8 +28,13 @@ kiwi.plugin('labeled-response', function (kiwi, log) {
                 log.debug("input?", input, "is IrcMessage?", input instanceof IrcMessage);
                 // have to duck type...
                 if (!(input.to1459 instanceof Function)) {
-                    const msg = new IrcMessage(...(input instanceof Array ? input : arguments));
-                    input = msg;
+                    if (typeof input === 'string' && input.indexOf(' ') !== -1) {
+                        input = ircLineParser(input);
+                    } else {
+
+                        const msg = new IrcMessage(...(input instanceof Array ? input : arguments));
+                        input = msg;
+                    }
                 }
 
                 input.tags.label ??= uuid();
