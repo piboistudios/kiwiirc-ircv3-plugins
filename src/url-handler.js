@@ -19,7 +19,11 @@ kiwi.plugin('url-handler', async function (kiwi, log) {
     const url = kiwi.state.entrypoint;
     const fragment = url.hash;
     const handleProto = fragment.indexOf('#ircs://') === 0 || fragment.indexOf('#irc://') === 0;
-    let buf = getPathname(url).split('/').pop() || fragment;
+    const pathStr = getPathname(url);
+    const fullPathStr = [pathStr, url.search, fragment && "/" + fragment,].filter(Boolean).join('');
+    const lastSlashIdx = fullPathStr.lastIndexOf('/');
+    const qmarkIdx = fullPathStr.indexOf('?');
+    let buf = fullPathStr.slice(lastSlashIdx === -1 ? 1 : lastSlashIdx + 1, qmarkIdx === -1 ? fullPathStr.length : qmarkIdx);
     const CHANTYPES = network.ircClient.network.supports('CHANTYPES');
     let chan = CHANTYPES ? CHANTYPES.indexOf(buf.charAt(0)) !== -1 ? buf : false : false;
     let msgid = url.searchParams.get('msgid');

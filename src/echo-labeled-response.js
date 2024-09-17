@@ -11,7 +11,7 @@ kiwi.plugin('labeled-response', function (kiwi, log) {
         if (!evt.tags.label) evt.tags.label = uuid();
     });
     function getLabeledBuffer(state, buffer, message) {
-        const label = message.tags.label;
+        const label = message?.tags?.label;
         if (label !== undefined) {
             state.labelBuffer ??= {};
             if (!state.labelBuffer?.[label]) {
@@ -67,7 +67,7 @@ kiwi.plugin('labeled-response', function (kiwi, log) {
                 // have to duck type...
                 if (!(input.to1459 instanceof Function)) {
                     if (typeof input === 'string' && input.indexOf(' ') !== -1) {
-                        input = ircLineParser(input);
+                        input = parseIrcLine(input);
                     } else {
 
                         const msg = new IrcMessage(...(input instanceof Array ? input : arguments));
@@ -92,9 +92,9 @@ kiwi.plugin('labeled-response', function (kiwi, log) {
                         const target = event.params[0];
                         const buf = network.bufferByName(target);
                         if (buf) {
-                            const msg = buf.getMessages().find(m => m?.tags?.label === event.tags.label);
+                            const msg = buf.getMessages().find(m => m?.tags?.label && m.tags.label === event.tags.label);
                             if (msg) {
-
+                                log.debug('not rendering labeled msg');
                                 msg.tags.msgid = event.tags.msgid;
                                 return;
                             }

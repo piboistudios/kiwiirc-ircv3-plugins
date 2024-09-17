@@ -178,21 +178,22 @@ kiwi.plugin('sasl-oauth-external-startup', function (kiwi, log) {
         },
         async created() {
             const params = new URLSearchParams(location.search);
-            kiwi.state.entrypoint = new URL('' + location);
+            this.$state.entrypoint = new URL('' + location);
+            this.$state.entrypoint.searchParams.delete('code');
             window.addEventListener('beforeunload', () => {
                 forceSaveState();
             });
             await this.$state.persistence.loadStateIfExists();
             log.debug("saved connection options", JSON.stringify(this.$state.setting('connection.options') || null, null, 4));
             const oauth2 = this.$state.setting('oauth2');
-            const url = new URL(this.$state.setting('baseURl') || '' + location);
+            const url = new URL(this.$state.setting('baseUrl') || '' + location);
             url.searchParams.delete('code');
             const trail = url.toString().charAt(url.length-1) === '/' ? '/' : ''
             history.replaceState({}, '', url + trail);
             this.$nextTick(() => {
                 this.$state.history = new (kiwi.require('libs/History').History)(this.$state.setting('baseUrl') || '' + window.location)
             })
-            let redirectUri = window.location.toString()
+            let redirectUri = this.$state.entrypoint.toString()
             log.debug("redirect uri:", redirectUri);
             // if (redirectUri.charAt(redirectUri.length - 1) === '/') redirectUri = redirectUri.slice(0, -1);
             function authorize(meta) {
