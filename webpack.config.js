@@ -14,6 +14,8 @@ module.exports = {
         'echo-labeled-response-webpacked': './src/echo-labeled-response.js',
         'conference-lite-webpacked': './src/conference-lite.js',
         'url-handler-webpacked': './src/url-handler.js',
+        'chathistory-targets-webpacked': './src/chathistory-targets.js',
+        'search-webpacked': './src/search.js',
         // 'module/b/index': 'module/b/index.js',
     },
     output: {

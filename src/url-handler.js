@@ -8,6 +8,22 @@ kiwi.plugin('url-handler', async function (kiwi, log) {
             return url.pathname.slice(0, -1);
         } else return url.pathname;
     }
+    function fixBaseUrl(path) {
+        log.debug("Path?", path);
+        const baseURL = kiwi.state.setting('baseURL');
+        if (baseURL) {
+            const lastPart = (new URL(baseURL).pathname).split('/').filter(Boolean).pop();
+            const pathParts = path.split('/').filter(Boolean);
+            log.debug('debug', {
+                lastPart,
+                pathParts
+            });
+            if (pathParts[0] === lastPart) {
+                return '/' + pathParts.slice(1).join('/');
+            }
+        }
+        return path;
+    }
     /**
      * 
      * @type { import('../../kiwiirc/src/libs/state/NetworkState').default}
@@ -20,7 +36,11 @@ kiwi.plugin('url-handler', async function (kiwi, log) {
     const fragment = url.hash;
     const handleProto = fragment.indexOf('#ircs://') === 0 || fragment.indexOf('#irc://') === 0;
     const pathStr = getPathname(url);
-    const fullPathStr = [pathStr, url.search, fragment && "/" + fragment,].filter(Boolean).join('');
+    const fullPathStr = [
+        fixBaseUrl(pathStr),
+        url.search,
+        fragment && "/" + fragment,
+    ].filter(Boolean).join('');
     const lastSlashIdx = fullPathStr.lastIndexOf('/');
     const qmarkIdx = fullPathStr.indexOf('?');
     let buf = fullPathStr.slice(lastSlashIdx === -1 ? 1 : lastSlashIdx + 1, qmarkIdx === -1 ? fullPathStr.length : qmarkIdx);
@@ -41,7 +61,7 @@ kiwi.plugin('url-handler', async function (kiwi, log) {
             msgid = protoUrl.searchParams.get('msgid');
         }
     }
-    window.history.replaceState(null, '', kiwi.state.history.baseUrl);
+    window.history.replaceState(null, '', kiwi.state.history.baseURL);
     log.debug("Setting active buffer to ", chan || nick);
     let buffer = network.bufferByName(chan || nick);
     if (!buffer) buffer = kiwi.state.addBuffer(network.id, chan || nick);

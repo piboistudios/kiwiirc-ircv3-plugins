@@ -48,19 +48,25 @@
     background: var(--brand-default-bg);
     color: 1px solid var(--brand-default-fg);
 }
+
 .emoji-mart {
     z-index: 11;
 }
+
 .video-controls .control {
     opacity: 0;
     transition: opacity ease-in-out 0.25s;
 }
-.kiwi-conference, .conference-container {
+
+.kiwi-conference,
+.conference-container {
     height: 100%;
 }
+
 .kiwi-conference {
     overflow: hidden;
 }
+
 .control-container.mobile {
     justify-content: end;
 }
@@ -99,16 +105,19 @@
 .in-reply-to {
     margin-right: 8px;
 }
+
 .video-nick {
     position: absolute;
     bottom: 0;
     width: 100%;
 }
+
 .video-nick a {
     font-weight: bold;
     font-size: 5vmin;
     /* transition: opacity 1 */
 }
+
 .peer {
     margin-bottom: 8px;
     /* background: var(--comp-usermenu-open-bg); */
@@ -317,6 +326,140 @@
     opacity: 0;
 }
 
+.unread-indicator {
+    width: 8px;
+    height: 8px;
+    margin: auto;
+    border-radius: 32px;
+    background: var(--comp-statebrowser-highlight);
+}
+
+.kiwi-searchinput-controls {
+    display: flex;
+    width: 100%;
+    justify-content: space-around;
+    padding: 4px;
+    flex-flow: row wrap;
+    align-items: stretch;
+    background: var(--comp-statebrowser-bg);
+    color: var(--comp-statebrowser-fg);
+}
+
+.kiwi-searchinput-controls input::placeholder {
+    color: lightgrey;
+}
+
+.kiwi-searchinput-controls label {
+    color: var(--comp-statebrowser-fg) !important;
+}
+
+.kiwi-searchinput-controls .control-group {
+    display: flex;
+    flex-flow: row wrap;
+    flex-grow: 1;
+    width: 50%;
+}
+
+.kiwi-searchinput-controls label {
+    color: var(--comp-statebrowser-fg);
+}
+
+.kiwi-searchinput-controls .kiwi-ircinput-editor {
+    overflow: hidden;
+}
+.kiwi-searchinput-controls .kiwi-autocomplete {
+    width: fit-content;
+}
+.kiwi-searchinput-controls .control {
+    display: flex;
+    flex-flow: column wrap;
+    width: calc(50% - 16px);
+    padding: 8px;
+}
+
+.kiwi-searchinput-controls .ref-input {
+    overflow: visible;
+    height: 76px;
+}
+.kiwi-searchinput-controls .ref-input .kiwi-autocomplete,
+.kiwi-searchinput-controls .ref-input .kiwi-autocomplete-item, 
+.kiwi-searchinput-controls .ref-input .kiwi-autocomplete-item--selected {
+    color: var(--brand-default-fg) !important;
+}
+
+.kiwi-searchinput-controls .button-group .u-button {
+    width: fit-content;
+    color: var(--brand-default-fg);
+}
+
+/* 
+.kiwi-searchinput-controls input[type="datetime-local"] {
+    background: var(--brand-default-bg) !important;
+    color: var(--brand-default-fg) !important;
+} */
+
+.kiwi-searchinput-controls input {
+    color: white !important;
+}
+
+.search-loading svg {
+    fill: var(--comp-statebrowser-fg) !important;
+}
+
+.control input {
+    width: 100%;
+}
+
+.kiwi-searchinput-controls .query {
+    width: 100%;
+    justify-content: space-between;
+}
+
+.kiwi-searchinput-controls .query .control {
+    width: 100%;
+}
+
+.search-loading {
+    display: flex;
+    justify-content: center;
+}
+
+[data-buffer="*search"]>div>div>div:first-of-type {
+    margin-top: 0;
+}
+
+[data-buffer="*search"] {
+    height: 100%;
+    background: var(--brand-midtone);
+    color: var(--brand-default-fg);
+    padding: 1em;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+[data-buffer="*search"]>div {
+    background: var(--brand-default-bg);
+}
+
+.compact {
+    background: unset !important;
+    padding: 0;
+}
+
+.signup-buttons {
+    display: flex;
+    justify-content: space-around;
+}
+
+.signup-buttons .u-link {
+    width: auto;
+    height: auto;
+}
+
+.signup-buttons img {
+    height: 48px;
+}
+
 .selected-emoji {
     position: relative;
     display: flex;
@@ -330,19 +473,25 @@
 .kiwi-messageinfo-reply .fa-face-smile {
     transform: translate(14px, 3px);
 }
-.kiwi-messageinfo-actions .kiwi-messageinfo-reply,.kiwi-messageinfo-actions .kiwi-messageinfo-conference {
+
+.kiwi-messageinfo-actions .kiwi-messageinfo-reply .u-link,
+.kiwi-messageinfo-actions .kiwi-messageinfo-reply,
+.kiwi-messageinfo-actions .kiwi-messageinfo-conference {
     background: var(--brand-primary);
     color: white !important;
     /* color: var(--brand-default-bg); */
 }
+
 .kiwi-messageinfo-conference {
     padding: 8px;
 }
+
 .call-started.kiwi-messageinfo-actions {
     display: flex;
     width: 100%;
     justify-content: center;
 }
+
 .fa-stack-2x {
     position: relative;
 }
@@ -362,7 +511,7 @@
 }
 
 .kiwi-emoji-mart {
-    
+
     bottom: 4px;
     z-index: 10;
 }
@@ -598,7 +747,9 @@ ul.dropdown-menu li {
     height: auto;
     width: auto;
 }
-.message-react-emoji-mart,.react-emoji-mart {
+
+.message-react-emoji-mart,
+.react-emoji-mart {
     position: fixed;
     transform: translateY(-32px);
     transition: opacity ease-in-out 0.2s;
@@ -609,6 +760,23 @@ ul.dropdown-menu li {
     height: 256px;
 
 }
+
+.github-sso {
+    height: 100%;
+    width: 100%;
+    background-repeat: no-repeat;
+    background-size: contain;
+    min-height: 48px;
+    background-image: var(--github-icon);
+    min-width: 48px;
+}
+
+.kiwi-searchinput-controls .button-group {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+}
+
 @media screen and (width < 720px) {
     .conference {
         grid-template-columns: repeat(2, 50%);

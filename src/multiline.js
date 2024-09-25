@@ -93,38 +93,32 @@ kiwi.plugin('multiline', function (kiwi, log) {
 
         // receiving 
         kiwi.on('irc.batch start draft/multiline', (batch, network, h) => {
-            log.debug('uh', batch, network, h);
-            batches[batch.id] = batch;
             h.handled = true;
         });
         kiwi.on('irc.message', (message, network, h) => {
-            if (message.batch && batches[message.batch?.id] && message.batch?.type === 'draft/multiline') {
-                console.log("Got multiline...", message.message);
+            if (!message.batched && message.batch && message.batch.type === 'draft/multiline') {
+                log.debug("Got multiline...", message);
+                batches[message.batch.id] = message;
                 h.handled = true;
-                const batch = batches[message.batch.id];
-                if (!batch.events) {
-                    batch.events = []
-                }
-                batch.events.push(message);
+            }
+            if (message.batched) {
+                log.debug("Batched message:", message);
             }
         });
         kiwi.on('irc.batch end draft/multiline', (batch, network, h) => {
-            delete batches[batch.id];
-            log.debug("events:", batch.events, batch);
-            if (!batch.events) return;
-            const [event] = batch.events;
+            h.handled = true;
+            if (!batch.commands.length) return;
             const message = {
-                ...event,
-                message: batch.events.map(e => e.message + (e.tags["draft/multiline-concat"] !== undefined ? '' : '\n')).join(''),
+                ...batches[batch.id],
+                batch,
+                message: batch.commands.map(cmd => cmd.params[1] + (cmd?.tags?.["draft/multiline-concat"] !== undefined ? '' : '\n')).join(''),
                 tags: {
                     ...batch.tags,
-                    ...event.tags,
-                    msgid: batch.id,
                     batch: undefined
-                }
+                },
+                batched: true
             }
-            h.handled = true;
-            log.debug("Posting all up in this bit", message)
+            delete batches[message.batch.id];
             ircClient.parsed_middleware.handle(['message', message, ircClient], function (err) {
                 if (err) {
                     console.error(err.stack);

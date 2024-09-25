@@ -94,7 +94,7 @@ kiwi.plugin('message-redaction', async function (kiwi, log) {
                                         server_time: new Date(event.tags.time || Date.now()),
                                         nick: event.nick,
                                         message: messageBody,
-                                        type: event.type,
+                                        type: 'message',
                                         tags: event.tags || {},
                                     };
                                     kiwi.state.addMessage(buf, message)

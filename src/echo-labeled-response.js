@@ -1,7 +1,7 @@
 const parseIrcLine = require('irc-framework/src/irclineparser');
 const { v4: uuid } = require('uuid');
 const UI_MESSAGES = ['PRIVMSG', 'NOTICE'];
-kiwi.plugin('labeled-response', function (kiwi, log) {
+kiwi.plugin('labeled-response', async function (kiwi, log) {
     kiwi.on('input.command.*', async (evt) => {
         /**
          * because message gets rendered in UI and tags are set 
@@ -15,6 +15,7 @@ kiwi.plugin('labeled-response', function (kiwi, log) {
         if (label !== undefined) {
             state.labelBuffer ??= {};
             if (!state.labelBuffer?.[label]) {
+                if (buffer.name === '*') return buffer;
                 state.labelTimestamps ??= [];
                 const timestamp = Date.now();
                 state.labelBuffer[label] = buffer;
@@ -53,55 +54,55 @@ kiwi.plugin('labeled-response', function (kiwi, log) {
   * @type {typeof import('irc-framework/src/ircmessage')}
   */
     const { Message: IrcMessage, ircLineParser } = require('irc-framework')
-    kiwi.on('start', () => {
-        /**
-         * @type {import('../../kiwiirc/src/libs/state/NetworkState').default}
-         */
-        const network = kiwi.state.getActiveNetwork();
-        /**
-         * because not all messages sent by client are input.commands....
-         */
-        network.ircClient.use((client, raw, parsed) => {
-            const { ircClient } = network;
-            ircClient.raw = function raw(input) {
-                // have to duck type...
-                if (!(input.to1459 instanceof Function)) {
-                    if (typeof input === 'string' && input.indexOf(' ') !== -1) {
-                        input = parseIrcLine(input);
-                    } else {
+    await new Promise((resolve) => kiwi.on('start', resolve));
 
-                        const msg = new IrcMessage(...(input instanceof Array ? input : arguments));
-                        input = msg;
-                    }
+    /**
+     * @type {import('../../kiwiirc/src/libs/state/NetworkState').default}
+     */
+    const network = kiwi.state.getActiveNetwork();
+    /**
+     * because not all messages sent by client are input.commands....
+     */
+    network.ircClient.use((client, raw, parsed) => {
+        const { ircClient } = network;
+        ircClient.raw = function raw(input) {
+            // have to duck type...
+            if (!(input.to1459 instanceof Function)) {
+                if (typeof input === 'string' && input.indexOf(' ') !== -1) {
+                    input = parseIrcLine(input);
+                } else {
+
+                    const msg = new IrcMessage(...(input instanceof Array ? input : arguments));
+                    input = msg;
                 }
-
-                input.tags.label ??= uuid();
-                return this.connection.write(input.to1459());
-
             }
-            raw.use(
-                /**
-                 * 
-                 * @param {string} event_name 
-                 * @param {import('irc-framework/src/ircmessage')} event 
-                 * @param {*} next 
-                 * @returns 
-                 */
-                (event_name, event, line, client, next) => {
-                    if (event?.tags?.label && event?.tags?.msgid && UI_MESSAGES.includes(event_name.toUpperCase())) {
-                        const target = event.params[0];
-                        const buf = network.bufferByName(target);
-                        if (buf) {
-                            const msg = buf.getMessages().find(m => m?.tags?.label && m.tags.label === event.tags.label);
-                            if (msg) {
-                                log.debug('not rendering labeled msg');
-                                msg.tags.msgid = event.tags.msgid;
-                                return;
-                            }
+
+            input.tags.label ??= uuid();
+            return this.connection.write(input.to1459());
+
+        }
+        raw.use(
+            /**
+             * 
+             * @param {string} event_name 
+             * @param {import('irc-framework/src/ircmessage')} event 
+             * @param {*} next 
+             * @returns 
+             */
+            (event_name, event, line, client, next) => {
+                if (event?.tags?.label && event?.tags?.msgid && UI_MESSAGES.includes(event_name.toUpperCase())) {
+                    const target = event.params[0];
+                    const buf = network.bufferByName(target);
+                    if (buf) {
+                        const msg = buf.getMessages().find(m => m?.tags?.label && m.tags.label === event.tags.label);
+                        if (msg) {
+                            log.debug('not rendering labeled msg');
+                            msg.tags.msgid = event.tags.msgid;
+                            return;
                         }
                     }
-                    next();
-                });
-        })
+                }
+                next();
+            });
     })
 })

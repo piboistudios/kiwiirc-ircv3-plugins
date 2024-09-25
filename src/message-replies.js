@@ -123,11 +123,18 @@ kiwi.plugin('message-replies', async function (kiwi, log) {
         },
 
     }
+    const replyUi = {
+        computed: {
+            replyable() {
+                return REPLY_COMMANDS.indexOf(this.message.type.toUpperCase()) !== -1
+            }
+        }
+    }
     const _ = require('lodash');
     const append = /* kiwi.Vue.createApp */({
 
         template: `
-            <div v-if="reacts" class="react-counts">
+            <div v-if="replyable && reacts" class="react-counts">
                 <div @click.stop="reactWith(emoji)" class="react-count kiwi-controlinput-button tooltip-container" v-for="(reactors, emoji) in reacts" :key="emoji">
                     
                     <i>{{ emoji }}</i>
@@ -159,7 +166,7 @@ kiwi.plugin('message-replies', async function (kiwi, log) {
                 </div>
             </div>
         `,
-        mixins: [EmojiPicker],
+        mixins: [EmojiPicker, replyUi],
         components: { EmojiPicker: Picker },
         filters: {
 
@@ -222,6 +229,7 @@ kiwi.plugin('message-replies', async function (kiwi, log) {
             }
         },
         mounted() {
+            if (!this.replyable) return;
             const self = this;
             this.message[REACT_INTERNALS] = {
                 update: () => {
@@ -237,7 +245,7 @@ kiwi.plugin('message-replies', async function (kiwi, log) {
         props: ["message", "buffer", "messagelist", "color"]
     })
     const prepend = /* kiwi.Vue.createApp */({
-        template: `<div  v-if="isReply" class="irc-fg-colour-grey"  >
+        template: `<div  v-if="replyable && isReply" class="irc-fg-colour-grey"  >
             <div @click.self.stop="scrollToReply" style="overflow:hidden;white-space:nowrap;display:inline-block;font-weight:initial;">
             <svg-icon @click.self.stop="scrollToReply" icon="reply" class="rotate-180"/>
             <span class="in-reply-to" @click.self.stop="scrollToReply">
@@ -251,6 +259,7 @@ kiwi.plugin('message-replies', async function (kiwi, log) {
                 <div @click.self.stop="scrollToReply" class="truncate" style="max-width: 25vw;display:inline-block" ><span @click.self.stop="scrollToReply" class="inline" v-html="subject.html"/></div>
             </a>
         </div>`,
+        mixins: [replyUi],
         created() {
         },
         methods: {
@@ -300,10 +309,11 @@ kiwi.plugin('message-replies', async function (kiwi, log) {
         props: ['message', 'messagelist', 'buffer', 'color']
     });
     const reply = /* kiwi.Vue.createApp */({
-        template: `<a v-if="message.tags.msgid" @click="reply" class="u-link kiwi-messageinfo-reply">
+        template: `<a v-if="replyable && message.tags.msgid" @click="reply" class="u-link kiwi-messageinfo-reply">
                     <svg-icon icon="reply" class="rotate-180"/>
                     Reply
                     </a>`,
+        mixins: [replyUi],
         methods: {
             reply() {
                 this.buffer.state.reply = this.message;
@@ -317,7 +327,7 @@ kiwi.plugin('message-replies', async function (kiwi, log) {
 
     const react = /* kiwi.Vue.createApp */({
         template: `
-            <div class="react-btn">
+            <div v-if="replyable" class="react-btn">
                 <emoji-picker
                     v-if="reacting"
                     :class="{active: reacting}"
@@ -339,7 +349,7 @@ kiwi.plugin('message-replies', async function (kiwi, log) {
             EmojiPicker: Picker
         },
 
-        mixins: [EmojiPicker],
+        mixins: [EmojiPicker, replyUi],
         methods: {
             react() {
                 this.reacting = !this.reacting;
